@@ -11,6 +11,7 @@ export function AuthProvider({ children }) {
   useEffect(() => {
     const access = localStorage.getItem('access')
     if (access) {
+      api.defaults.headers.common['Authorization'] = `Bearer ${access}`
       api.get('/auth/me/')
         .then(({ data }) => setUser(data))
         .catch(() => localStorage.clear())
@@ -21,22 +22,23 @@ export function AuthProvider({ children }) {
   }, [])
 
   const login = async (email, password) => {
-  const { data } = await api.post('/auth/login/', { email, password })
-  localStorage.setItem('access',  data.access)
-  localStorage.setItem('refresh', data.refresh)
-  
-  // ✅ Pass token directly instead of relying on interceptor
-  const me = await api.get('/auth/me/', {
-    headers: { Authorization: `Bearer ${data.access}` }
-  })
-  setUser(me.data)
-  return me.data
+    const { data } = await api.post('/auth/login/', { email, password })
+
+    localStorage.setItem('access', data.access)
+    localStorage.setItem('refresh', data.refresh)
+
+    api.defaults.headers.common['Authorization'] = `Bearer ${data.access}`
+
+    const me = await api.get('/auth/me/')
+    setUser(me.data)
   }
+
   const logout = async () => {
     try {
       await api.post('/auth/logout/', { refresh: localStorage.getItem('refresh') })
     } catch { /* ignore */ }
     localStorage.clear()
+    delete api.defaults.headers.common['Authorization']
     setUser(null)
   }
 
