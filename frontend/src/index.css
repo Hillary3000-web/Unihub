@@ -1,0 +1,62 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  body {
+    @apply bg-cream font-body text-navy antialiased;
+  }
+  h1, h2, h3 {
+    @apply font-display;
+  }
+}
+
+@layer components {
+  .btn-primary {
+    @apply bg-navy text-white px-6 py-2.5 rounded-lg font-body font-medium
+           hover:bg-navy-600 active:scale-95 transition-all duration-200
+           disabled:opacity-50 disabled:cursor-not-allowed;
+  }
+  .btn-gold {
+    @apply bg-gold text-white px-6 py-2.5 rounded-lg font-body font-medium
+           hover:bg-gold-dark active:scale-95 transition-all duration-200
+           disabled:opacity-50 disabled:cursor-not-allowed;
+  }
+  .btn-outline {
+    @apply border-2 border-navy text-navy px-6 py-2.5 rounded-lg font-body font-medium
+           hover:bg-navy hover:text-white active:scale-95 transition-all duration-200;
+  }
+  .card {
+    @apply bg-white rounded-2xl shadow-card p-6 border border-navy-50;
+  }
+  .input {
+    @apply w-full px-4 py-3 rounded-lg border border-navy-100 bg-white
+           font-body text-navy placeholder-navy-200
+           focus:outline-none focus:ring-2 focus:ring-gold focus:border-transparent
+           transition-all duration-200;
+  }
+  .label {
+    @apply block text-sm font-medium text-navy-400 mb-1.5;
+  }
+  .badge-normal    { @apply bg-navy-50 text-navy-400 text-xs font-medium px-2.5 py-1 rounded-full; }
+  .badge-important { @apply bg-amber-100 text-amber-700 text-xs font-medium px-2.5 py-1 rounded-full; }
+  .badge-urgent    { @apply bg-red-100 text-red-700 text-xs font-medium px-2.5 py-1 rounded-full; }
+
+  .grade-A { @apply text-emerald-600 font-semibold; }
+  .grade-B { @apply text-blue-600 font-semibold; }
+  .grade-C { @apply text-amber-600 font-semibold; }
+  .grade-D { @apply text-orange-500 font-semibold; }
+  .grade-E { @apply text-red-500 font-semibold; }
+  .grade-F { @apply text-red-700 font-bold; }
+}
+
+/* Subtle dot-grid background */
+.dot-grid {
+  background-image: radial-gradient(circle, #0F204420 1px, transparent 1px);
+  background-size: 28px 28px;
+}
+
+/* Scrollbar */
+::-webkit-scrollbar { width: 6px; }
+::-webkit-scrollbar-track { background: #FAF8F3; }
+::-webkit-scrollbar-thumb { background: #C5D1E8; border-radius: 3px; }
