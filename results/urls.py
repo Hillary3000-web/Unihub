@@ -9,6 +9,7 @@ from .views import (
     MyResultsView,
     AllResultsView,
     UploadResultsView,
+    UploadPDFResultsView,
     # Study Materials
     StudyMaterialListView,
     StudyMaterialUploadView,
@@ -28,6 +29,7 @@ urlpatterns = [
     path("results/me/",                     MyResultsView.as_view(),           name="results-mine"),
     path("results/all/",                    AllResultsView.as_view(),          name="results-all"),
     path("results/upload/",                 UploadResultsView.as_view(),       name="results-upload"),
+    path("results/upload-pdf/",             UploadPDFResultsView.as_view(),    name="results-upload-pdf"),
 
     # ── Study Materials ────────────────────────────────────────────────────────
     path("materials/",                      StudyMaterialListView.as_view(),   name="materials-list"),

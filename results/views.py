@@ -1,16 +1,21 @@
 """
 results/views.py — Complete view set for UniHub backend.
-Covers: Results, Study Materials, Announcements.
+Covers: Results, Study Materials, Announcements, PDF Upload.
 """
 
+import re
+import pdfplumber
 import pandas as pd
+
 from django.contrib.auth import get_user_model
 from django.db import transaction
+from django.views.decorators.csrf import csrf_exempt
+from django.utils.decorators import method_decorator
 
 from rest_framework import generics, status
 from rest_framework.views import APIView
 from rest_framework.response import Response
-from rest_framework.permissions import IsAuthenticated
+from rest_framework.permissions import IsAuthenticated, AllowAny
 from rest_framework.parsers import MultiPartParser, FormParser
 
 from .models import Course, Result, StudyMaterial, Announcement
@@ -28,35 +33,121 @@ from .permissions import IsAdvisor, IsStudent
 
 User = get_user_model()
 
-# ── FUTO Year 1 course registry ────────────────────────────────────────────────
-FUTO_YEAR1_COURSES = {
-    "MTH101":       ("Mathematics I",               2),
-    "PHY101":       ("Physics I",                   2),
-    "PHY107":       ("Physics Practical I",         1),
-    "CHM101":       ("Chemistry I",                 2),
-    "CHM107":       ("Chemistry Practical I",       1),
-    "COS101":       ("Introduction to Computing",   3),
-    "GST111":       ("Communication Skills",        2),
-    "GST103":       ("Nigerian Peoples & Culture",  1),
-    "STA111":       ("Statistics I",                3),
-    "FUTO-IGB101":  ("Igbo Language",               1),
-    "FUTO-FRN101":  ("French Language",             1),
-}
+# ── FUTO Year 1 course registry (ordered — matches PDF column order) ──────────
+COURSE_ORDER = [
+    ("MTH101",      "Mathematics I",               2),
+    ("PHY101",      "Physics I",                   2),
+    ("PHY107",      "Physics Practical I",         1),
+    ("CHM101",      "Chemistry I",                 2),
+    ("CHM107",      "Chemistry Practical I",       1),
+    ("COS101",      "Introduction to Computing",   3),
+    ("GST111",      "Communication Skills",        2),
+    ("GST103",      "Nigerian Peoples & Culture",  1),
+    ("STA111",      "Statistics I",                3),
+    ("FUTO-IGB101", "Igbo Language",               1),
+    ("FUTO-FRN101", "French Language",             1),
+]
 
-VALID_GRADES   = {"A", "B", "C", "D", "E", "F"}
-GRADE_TO_SCORE = {"A": 75, "B": 65, "C": 55, "D": 47, "E": 42, "F": 20}
+FUTO_YEAR1_COURSES = {code: (title, units) for code, title, units in COURSE_ORDER}
+VALID_GRADES       = {"A", "B", "C", "D", "E", "F"}
+GRADE_TO_SCORE     = {"A": 75, "B": 65, "C": 55, "D": 47, "E": 42, "F": 20}
+
+# Matches 11-digit FUTO reg number e.g. 20231386102
+REG_PATTERN = re.compile(r'\b(20\d{9})\b')
 
 
 # ══════════════════════════════════════════════════════════════════════════════
-#  RESULTS
+#  PDF PARSER
+# ══════════════════════════════════════════════════════════════════════════════
+
+def parse_pdf_results(file):
+    """
+    Parse a FUTO results PDF and return a list of dicts:
+    [{ 'reg_no': str, 'name': str, 'grades': [11 grade letters] }, ...]
+    """
+    students = []
+
+    with pdfplumber.open(file) as pdf:
+        for page in pdf.pages:
+            text = page.extract_text()
+            if not text:
+                continue
+
+            for line in text.split('\n'):
+                reg_match = REG_PATTERN.search(line)
+                if not reg_match:
+                    continue
+
+                reg_no = reg_match.group(1)
+                tokens = line.split()
+
+                # Find reg number position in tokens
+                reg_idx = next((i for i, t in enumerate(tokens) if t == reg_no), None)
+                if reg_idx is None:
+                    continue
+
+                after_reg = tokens[reg_idx + 1:]
+
+                # Collect single A-F grade letters
+                grade_tokens = [t for t in after_reg if t in VALID_GRADES]
+                if len(grade_tokens) < 9:
+                    continue  # not enough grades, skip row
+
+                grades = grade_tokens[:11]
+                while len(grades) < 11:
+                    grades.append(None)
+
+                # Extract name: tokens before first grade token
+                first_grade_idx = next(
+                    (i for i, t in enumerate(after_reg) if t in VALID_GRADES), None
+                )
+                if first_grade_idx is None:
+                    name = "Unknown"
+                else:
+                    name_tokens = after_reg[:first_grade_idx]
+                    # Remove serial numbers and 2-letter PDF artifacts (AN, CH, etc.)
+                    name_tokens = [
+                        t for t in name_tokens
+                        if not t.isdigit()
+                        and not (len(t) == 2 and t.isupper() and t.isalpha())
+                    ]
+                    name = ' '.join(name_tokens).strip(' ,.')
+
+                students.append({'reg_no': reg_no, 'name': name, 'grades': grades})
+
+    # Deduplicate by reg_no
+    seen, unique = set(), []
+    for s in students:
+        if s['reg_no'] not in seen:
+            seen.add(s['reg_no'])
+            unique.append(s)
+
+    return unique
+
+
+def parse_name(full_name):
+    """Split 'SURNAME, F. N.' into (first_name, last_name)."""
+    if ',' in full_name:
+        parts      = full_name.split(',', 1)
+        last_name  = parts[0].strip().title()
+        first_name = parts[1].strip().title()
+    else:
+        parts      = full_name.split(' ', 1)
+        last_name  = parts[0].strip().title()
+        first_name = parts[1].strip().title() if len(parts) > 1 else 'Student'
+    return first_name, last_name
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+#  RESULTS VIEWS
 # ══════════════════════════════════════════════════════════════════════════════
 
 def calculate_cgpa(results):
     total_weighted, total_units = 0, 0
     for r in results:
-        gp = Result.GRADE_POINTS.get(r.grade, 0)
+        gp              = Result.GRADE_POINTS.get(r.grade, 0)
         total_weighted += gp * r.course.unit
-        total_units += r.course.unit
+        total_units    += r.course.unit
     return round(total_weighted / total_units, 2) if total_units else 0.0
 
 
@@ -94,15 +185,151 @@ class AllResultsView(generics.ListAPIView):
         return qs
 
 
-class UploadResultsView(APIView):
-    """POST /api/results/upload/ — Advisor bulk uploads FUTO Excel sheet."""
-    permission_classes = [IsAuthenticated, IsAdvisor]
-    COURSE_COLUMNS     = list(FUTO_YEAR1_COURSES.keys())
+@method_decorator(csrf_exempt, name='dispatch')
+class UploadPDFResultsView(APIView):
+    """
+    POST /api/results/upload-pdf/
+    No auth required during testing phase.
+    Parses FUTO results PDF → creates student accounts → saves grades.
+    """
+    authentication_classes = []
+    permission_classes     = [AllowAny]
+    parser_classes         = [MultiPartParser, FormParser]
 
     def post(self, request):
-        serializer = UploadResultSerializer(data=request.data)
-        serializer.is_valid(raise_exception=True)
-        file = serializer.validated_data["file"]
+        file = request.FILES.get('file')
+        if not file:
+            return Response(
+                {"error": "No file provided."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        if not file.name.lower().endswith('.pdf'):
+            return Response(
+                {"error": "Please upload a PDF file."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        try:
+            parsed_students = parse_pdf_results(file)
+        except Exception as e:
+            return Response(
+                {"error": f"Failed to read PDF: {str(e)}"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        if not parsed_students:
+            return Response(
+                {"error": "No student data found in PDF. Check the file format."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        from users.models import StudentProfile
+
+        students_created = results_created = results_updated = students_skipped = 0
+        created_list = []
+        errors       = []
+
+        with transaction.atomic():
+            # Ensure all courses exist in DB
+            course_objs = {}
+            for code, title, units in COURSE_ORDER:
+                course, _ = Course.objects.get_or_create(
+                    code=code,
+                    defaults={
+                        "title":    title,
+                        "unit":     units,
+                        "semester": "Harmattan",
+                        "session":  "2023/2024",
+                    },
+                )
+                course_objs[code] = course
+
+            for s in parsed_students:
+                reg_no = s['reg_no']
+                name   = s['name']
+                grades = s['grades']
+
+                # Get or create student account
+                try:
+                    student = User.objects.get(identifier__iexact=reg_no, role="STUDENT")
+                except User.DoesNotExist:
+                    first_name, last_name = parse_name(name)
+                    email = f"{reg_no.lower()}@student.unihub.local"
+
+                    if User.objects.filter(email=email).exists():
+                        errors.append(f"Duplicate: {reg_no} — skipped.")
+                        students_skipped += 1
+                        continue
+
+                    try:
+                        student = User.objects.create_user(
+                            email      = email,
+                            password   = reg_no,
+                            first_name = first_name,
+                            last_name  = last_name,
+                            identifier = reg_no,
+                            role       = "STUDENT",
+                        )
+                        StudentProfile.objects.create(
+                            user       = student,
+                            department = "Computer Science",
+                            level      = 100,
+                        )
+                        students_created += 1
+                        created_list.append({
+                            "identifier": reg_no,
+                            "name":       student.get_full_name(),
+                            "department": "Computer Science",
+                        })
+                    except Exception as e:
+                        errors.append(f"{reg_no}: failed — {str(e)}")
+                        students_skipped += 1
+                        continue
+
+                # Save grades
+                for i, (code, _, _) in enumerate(COURSE_ORDER):
+                    grade = grades[i] if i < len(grades) else None
+                    if not grade or grade not in VALID_GRADES:
+                        continue
+                    _, created = Result.objects.update_or_create(
+                        student = student,
+                        course  = course_objs[code],
+                        defaults={
+                            "score": GRADE_TO_SCORE[grade],
+                            "grade": grade,
+                            "uploaded_by": None,
+                        },
+                    )
+                    if created:
+                        results_created += 1
+                    else:
+                        results_updated += 1
+
+        return Response({
+            "message":          "PDF processed successfully.",
+            "students_created": students_created,
+            "results_created":  results_created,
+            "results_updated":  results_updated,
+            "students_skipped": students_skipped,
+            "students":         created_list,
+            "errors":           errors,
+        })
+
+
+@method_decorator(csrf_exempt, name='dispatch')
+class UploadResultsView(APIView):
+    """POST /api/results/upload/ — Advisor bulk uploads FUTO Excel sheet."""
+    authentication_classes = []
+    permission_classes     = [AllowAny]
+    parser_classes         = [MultiPartParser, FormParser]
+    COURSE_COLUMNS         = [code for code, _, _ in COURSE_ORDER]
+
+    def post(self, request):
+        file = request.FILES.get('file')
+        if not file:
+            serializer = UploadResultSerializer(data=request.data)
+            serializer.is_valid(raise_exception=True)
+            file = serializer.validated_data["file"]
 
         try:
             df = pd.read_excel(file, header=2, dtype=str)
@@ -112,10 +339,11 @@ class UploadResultsView(APIView):
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
-        df.columns     = [str(c).strip().upper().replace(" ", "") for c in df.columns]
-        df             = df.dropna(subset=["REG.NO."])
-        created_count  = updated_count = skipped_count = 0
-        errors         = []
+        df.columns       = [str(c).strip().upper().replace(" ", "") for c in df.columns]
+        df               = df.dropna(subset=["REG.NO."])
+        students_created = created_count = updated_count = skipped_count = 0
+        created_list     = []
+        errors           = []
 
         with transaction.atomic():
             for idx, row in df.iterrows():
@@ -127,9 +355,37 @@ class UploadResultsView(APIView):
                 try:
                     student = User.objects.get(identifier__iexact=matric, role="STUDENT")
                 except User.DoesNotExist:
-                    errors.append(f"Row {row_num}: REG. NO. '{matric}' not found — skipped.")
-                    skipped_count += 1
-                    continue
+                    from users.models import StudentProfile
+
+                    safe_matric = matric.replace("/", "").replace(" ", "").lower()
+                    email = f"{safe_matric}@student.unihub.local"
+
+                    if User.objects.filter(email=email).exists():
+                        errors.append(f"Row {row_num}: Duplicate entry for '{matric}' — skipped.")
+                        skipped_count += 1
+                        continue
+
+                    first_name = str(row.get("FIRSTNAME") or row.get("FIRST NAME") or matric).strip()
+                    last_name  = str(row.get("LASTNAME") or row.get("LAST NAME") or row.get("SURNAME") or "Student").strip()
+
+                    student = User.objects.create_user(
+                        email      = email,
+                        password   = matric,
+                        first_name = first_name,
+                        last_name  = last_name,
+                        identifier = matric,
+                        role       = "STUDENT",
+                    )
+                    StudentProfile.objects.get_or_create(
+                        user     = student,
+                        defaults = {"department": "Unknown", "level": 100},
+                    )
+                    students_created += 1
+                    created_list.append({
+                        "identifier": matric,
+                        "name":       student.get_full_name(),
+                        "department": "Unknown",
+                    })
 
                 for course_code in self.COURSE_COLUMNS:
                     col_key   = course_code.replace("-", "")
@@ -150,9 +406,13 @@ class UploadResultsView(APIView):
                     )
 
                     _, created = Result.objects.update_or_create(
-                        student=student,
-                        course=course,
-                        defaults={"score": GRADE_TO_SCORE[grade], "grade": grade, "uploaded_by": request.user},
+                        student  = student,
+                        course   = course,
+                        defaults = {
+                            "score": GRADE_TO_SCORE[grade],
+                            "grade": grade,
+                            "uploaded_by": None,
+                        },
                     )
                     if created:
                         created_count += 1
@@ -161,24 +421,20 @@ class UploadResultsView(APIView):
 
         return Response({
             "message":          "Upload complete.",
+            "students_created": students_created,
             "results_created":  created_count,
             "results_updated":  updated_count,
             "students_skipped": skipped_count,
+            "students":         created_list,
             "errors":           errors,
         })
 
 
 # ══════════════════════════════════════════════════════════════════════════════
-#  STUDY MATERIALS (Resource Hub)
+#  STUDY MATERIALS
 # ══════════════════════════════════════════════════════════════════════════════
 
 class StudyMaterialListView(generics.ListAPIView):
-    """
-    GET /api/materials/
-    Returns all study materials.
-    Filter by course:        ?course=COS101
-    Filter by type:          ?type=PAST_QUESTION
-    """
     serializer_class   = StudyMaterialSerializer
     permission_classes = [IsAuthenticated]
 
@@ -186,7 +442,6 @@ class StudyMaterialListView(generics.ListAPIView):
         qs          = StudyMaterial.objects.select_related("uploaded_by").all()
         course_code = self.request.query_params.get("course")
         mat_type    = self.request.query_params.get("type")
-
         if course_code:
             qs = qs.filter(course_code__iexact=course_code)
         if mat_type:
@@ -198,11 +453,6 @@ class StudyMaterialListView(generics.ListAPIView):
 
 
 class StudyMaterialUploadView(generics.CreateAPIView):
-    """
-    POST /api/materials/upload/
-    Both Students and Advisors can upload materials.
-    Accepts multipart/form-data with fields: title, course_code, material_type, file
-    """
     serializer_class   = StudyMaterialUploadSerializer
     permission_classes = [IsAuthenticated]
     parser_classes     = [MultiPartParser, FormParser]
@@ -221,16 +471,11 @@ class StudyMaterialUploadView(generics.CreateAPIView):
 
 
 class StudyMaterialDeleteView(generics.DestroyAPIView):
-    """
-    DELETE /api/materials/<id>/delete/
-    Only the uploader or an Advisor can delete a material.
-    """
     queryset           = StudyMaterial.objects.all()
     permission_classes = [IsAuthenticated]
 
     def get_object(self):
         obj = super().get_object()
-        # Allow delete if user is the uploader OR an advisor
         if obj.uploaded_by != self.request.user and not self.request.user.is_advisor:
             from rest_framework.exceptions import PermissionDenied
             raise PermissionDenied("You can only delete materials you uploaded.")
@@ -238,7 +483,7 @@ class StudyMaterialDeleteView(generics.DestroyAPIView):
 
     def destroy(self, request, *args, **kwargs):
         obj = self.get_object()
-        obj.file.delete(save=False)  # delete the actual file from disk
+        obj.file.delete(save=False)
         obj.delete()
         return Response({"message": "Material deleted."}, status=status.HTTP_200_OK)
 
@@ -248,11 +493,6 @@ class StudyMaterialDeleteView(generics.DestroyAPIView):
 # ══════════════════════════════════════════════════════════════════════════════
 
 class AnnouncementListView(generics.ListAPIView):
-    """
-    GET /api/announcements/
-    All authenticated users can read announcements.
-    Filter by priority: ?priority=URGENT  or  ?priority=IMPORTANT
-    """
     serializer_class   = AnnouncementSerializer
     permission_classes = [IsAuthenticated]
 
@@ -265,10 +505,6 @@ class AnnouncementListView(generics.ListAPIView):
 
 
 class AnnouncementCreateView(generics.CreateAPIView):
-    """
-    POST /api/announcements/create/
-    Advisor only — create a new announcement.
-    """
     serializer_class   = AnnouncementCreateSerializer
     permission_classes = [IsAuthenticated, IsAdvisor]
 
@@ -286,12 +522,7 @@ class AnnouncementCreateView(generics.CreateAPIView):
 
 
 class AnnouncementDetailView(generics.RetrieveUpdateDestroyAPIView):
-    """
-    GET    /api/announcements/<id>/   — Anyone can read
-    PUT    /api/announcements/<id>/   — Advisor only (edit)
-    DELETE /api/announcements/<id>/   — Advisor only (delete)
-    """
-    queryset         = Announcement.objects.all()
+    queryset = Announcement.objects.all()
 
     def get_serializer_class(self):
         if self.request.method in ("PUT", "PATCH"):

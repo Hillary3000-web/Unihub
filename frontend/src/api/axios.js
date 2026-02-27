@@ -1,7 +1,8 @@
 import axios from 'axios'
 
+// In production, use the full backend URL. In dev, Vite proxies /api to Django.
 const api = axios.create({
-  baseURL: '/api',
+  baseURL: import.meta.env.VITE_API_URL || '/api',
   headers: { 'Content-Type': 'application/json' },
 })
 
@@ -21,7 +22,8 @@ api.interceptors.response.use(
       original._retry = true
       try {
         const refresh = localStorage.getItem('refresh')
-        const { data } = await axios.post('/api/auth/token/refresh/', { refresh })
+        const baseURL = import.meta.env.VITE_API_URL || '/api'
+        const { data } = await axios.post(`${baseURL}/auth/token/refresh/`, { refresh })
         localStorage.setItem('access', data.access)
         original.headers.Authorization = `Bearer ${data.access}`
         return api(original)

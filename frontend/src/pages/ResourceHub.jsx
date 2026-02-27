@@ -5,28 +5,28 @@ import api from '../api/axios'
 import toast from 'react-hot-toast'
 
 const MATERIAL_TYPES = ['ALL', 'PAST_QUESTION', 'LECTURE_NOTE', 'OTHER']
-const TYPE_LABELS    = { ALL: 'All', PAST_QUESTION: 'Past Questions', LECTURE_NOTE: 'Lecture Notes', OTHER: 'Other' }
-const TYPE_ICONS     = { PAST_QUESTION: '📝', LECTURE_NOTE: '📖', OTHER: '📁' }
+const TYPE_LABELS = { ALL: 'All', PAST_QUESTION: 'Past Questions', LECTURE_NOTE: 'Lecture Notes', OTHER: 'Other' }
+const TYPE_ICONS = { PAST_QUESTION: '📝', LECTURE_NOTE: '📖', OTHER: '📁' }
 
 export default function ResourceHub() {
   const { user } = useAuth()
-  const fileRef  = useRef()
+  const fileRef = useRef()
 
-  const [materials, setMaterials]     = useState([])
-  const [loading, setLoading]         = useState(true)
-  const [typeFilter, setTypeFilter]   = useState('ALL')
+  const [materials, setMaterials] = useState([])
+  const [loading, setLoading] = useState(true)
+  const [typeFilter, setTypeFilter] = useState('ALL')
   const [courseFilter, setCourseFilter] = useState('')
-  const [showUpload, setShowUpload]   = useState(false)
-  const [uploading, setUploading]     = useState(false)
+  const [showUpload, setShowUpload] = useState(false)
+  const [uploading, setUploading] = useState(false)
   const [form, setForm] = useState({ title: '', course_code: '', material_type: 'PAST_QUESTION' })
 
   const fetchMaterials = (type = 'ALL', course = '') => {
     const params = new URLSearchParams()
-    if (type   !== 'ALL') params.append('type', type)
-    if (course)           params.append('course', course)
+    if (type !== 'ALL') params.append('type', type)
+    if (course) params.append('course', course)
     setLoading(true)
     api.get(`/materials/?${params}`)
-      .then(({ data }) => setMaterials(data))
+      .then(({ data }) => setMaterials(Array.isArray(data) ? data : data.results || []))
       .catch(() => toast.error('Failed to load materials.'))
       .finally(() => setLoading(false))
   }
@@ -86,14 +86,14 @@ export default function ResourceHub() {
             <h1 className="font-display text-navy text-3xl font-semibold">Resource Hub</h1>
             <p className="text-navy-300 font-body mt-1">Past questions, lecture notes, and study materials</p>
           </div>
-          <button onClick={() => setShowUpload(!showUpload)} className="btn-gold">
+          <button onClick={() => setShowUpload(!showUpload)} className={showUpload ? 'btn-outline' : 'btn-gold'}>
             {showUpload ? '✕ Cancel' : '+ Upload'}
           </button>
         </div>
 
         {/* Upload form */}
         {showUpload && (
-          <div className="card mb-6 animate-fade-up border-gold border">
+          <div className="card mb-6 animate-fade-up border-gold/30 border">
             <h2 className="font-display text-navy text-lg mb-4">Upload Study Material</h2>
             <form onSubmit={handleUpload} className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div>
@@ -120,7 +120,12 @@ export default function ResourceHub() {
               </div>
               <div className="sm:col-span-2">
                 <button type="submit" disabled={uploading} className="btn-primary">
-                  {uploading ? 'Uploading...' : 'Upload Material'}
+                  {uploading ? (
+                    <span className="flex items-center gap-2">
+                      <span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                      Uploading...
+                    </span>
+                  ) : 'Upload Material'}
                 </button>
               </div>
             </form>
@@ -129,15 +134,15 @@ export default function ResourceHub() {
 
         {/* Filters */}
         <div className="flex flex-col sm:flex-row gap-3 mb-6 animate-fade-up" style={{ animationDelay: '0.1s' }}>
-          <div className="flex gap-2 overflow-x-auto">
+          <div className="flex gap-2 overflow-x-auto pb-1">
             {MATERIAL_TYPES.map((t) => (
               <button
                 key={t}
                 onClick={() => { setTypeFilter(t); fetchMaterials(t, courseFilter) }}
-                className={`px-4 py-2 rounded-xl text-sm font-medium font-body whitespace-nowrap transition-all duration-200
+                className={`px-4 py-2 rounded-xl text-sm font-medium font-body whitespace-nowrap transition-all duration-300
                   ${typeFilter === t
-                    ? 'bg-navy text-white shadow'
-                    : 'bg-white text-navy-400 border border-navy-100 hover:text-navy'
+                    ? 'bg-navy text-white shadow-lg'
+                    : 'bg-white text-navy-400 border border-navy-100 hover:text-navy hover:border-navy-200'
                   }`}
               >
                 {TYPE_LABELS[t]}
@@ -148,6 +153,7 @@ export default function ResourceHub() {
             <input
               value={courseFilter}
               onChange={(e) => setCourseFilter(e.target.value)}
+              onKeyDown={(e) => e.key === 'Enter' && handleFilter()}
               placeholder="Filter by course (e.g. COS101)"
               className="input !py-2 text-sm !w-52"
             />
@@ -157,20 +163,30 @@ export default function ResourceHub() {
 
         {/* Materials grid */}
         {loading ? (
-          <div className="text-center py-16 font-body text-navy-300 animate-pulse">Loading materials...</div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+            {[1, 2, 3, 4, 5, 6].map(i => (
+              <div key={i} className="card">
+                <div className="skeleton h-8 w-8 rounded-xl mb-3" />
+                <div className="skeleton h-5 w-3/4 mb-2" />
+                <div className="skeleton h-3 w-full mb-4" />
+                <div className="skeleton h-9 w-full rounded-lg" />
+              </div>
+            ))}
+          </div>
         ) : materials.length > 0 ? (
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
             {materials.map((m, i) => (
               <div
                 key={m.id}
-                className="card hover:shadow-lg transition-all duration-200 animate-fade-up group"
+                className="card hover-glow animate-fade-up group"
                 style={{ animationDelay: `${i * 0.05}s` }}
               >
                 <div className="flex items-start justify-between mb-3">
                   <span className="text-2xl">{TYPE_ICONS[m.material_type] ?? '📁'}</span>
                   <span className="badge-normal text-xs">{m.course_code}</span>
                 </div>
-                <h3 className="font-body font-semibold text-navy text-sm leading-snug mb-1 line-clamp-2">{m.title}</h3>
+                <h3 className="font-body font-semibold text-navy text-sm leading-snug mb-1 line-clamp-2
+                               group-hover:text-gold transition-colors duration-300">{m.title}</h3>
                 <p className="font-body text-navy-200 text-xs mb-4">
                   {TYPE_LABELS[m.material_type]} · Uploaded by {m.uploaded_by_name}
                 </p>
@@ -179,14 +195,15 @@ export default function ResourceHub() {
                     href={m.file_url}
                     target="_blank"
                     rel="noreferrer"
-                    className="flex-1 text-center text-sm font-body font-medium text-navy border border-navy-100 py-2 rounded-lg hover:bg-navy hover:text-white transition-all duration-200"
+                    className="flex-1 text-center text-sm font-body font-medium text-navy border border-navy-100
+                               py-2 rounded-xl hover:bg-navy hover:text-white transition-all duration-300"
                   >
-                    Download
+                    ↓ Download
                   </a>
                   {(m.uploaded_by_name === `${user?.first_name} ${user?.last_name}` || user?.role === 'ADVISOR') && (
                     <button
                       onClick={() => handleDelete(m.id)}
-                      className="p-2 text-red-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors duration-200"
+                      className="p-2 text-red-300 hover:text-red-600 hover:bg-red-50 rounded-xl transition-all duration-200"
                     >
                       🗑
                     </button>

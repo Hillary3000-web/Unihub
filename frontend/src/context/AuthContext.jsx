@@ -21,16 +21,42 @@ export function AuthProvider({ children }) {
     }
   }, [])
 
-  const login = async (email, password) => {
-    const { data } = await api.post('/auth/login/', { email, password })
+  // Advisor login: staff ID + password
+  const login = async (identifier, password) => {
+    try {
+      const { data } = await api.post('/auth/login/', { email: identifier, password })
 
-    localStorage.setItem('access', data.access)
-    localStorage.setItem('refresh', data.refresh)
+      localStorage.setItem('access', data.access)
+      localStorage.setItem('refresh', data.refresh)
+      api.defaults.headers.common['Authorization'] = `Bearer ${data.access}`
 
-    api.defaults.headers.common['Authorization'] = `Bearer ${data.access}`
+      const me = await api.get('/auth/me/')
+      setUser(me.data)
+      return me.data  // Return the user so Login page can use it
+    } catch (err) {
+      localStorage.clear()
+      delete api.defaults.headers.common['Authorization']
+      throw err
+    }
+  }
 
-    const me = await api.get('/auth/me/')
-    setUser(me.data)
+  // Student login: reg number only (password = reg number)
+  const studentLogin = async (regNumber) => {
+    try {
+      const { data } = await api.post('/auth/student-login/', { reg_number: regNumber })
+
+      localStorage.setItem('access', data.access)
+      localStorage.setItem('refresh', data.refresh)
+      api.defaults.headers.common['Authorization'] = `Bearer ${data.access}`
+
+      const me = await api.get('/auth/me/')
+      setUser(me.data)
+      return me.data
+    } catch (err) {
+      localStorage.clear()
+      delete api.defaults.headers.common['Authorization']
+      throw err
+    }
   }
 
   const logout = async () => {
@@ -46,7 +72,7 @@ export function AuthProvider({ children }) {
   const isAdvisor = user?.role === 'ADVISOR'
 
   return (
-    <AuthContext.Provider value={{ user, login, logout, loading, isStudent, isAdvisor }}>
+    <AuthContext.Provider value={{ user, login, studentLogin, logout, loading, isStudent, isAdvisor }}>
       {children}
     </AuthContext.Provider>
   )

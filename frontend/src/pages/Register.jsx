@@ -3,16 +3,12 @@ import { Link, useNavigate } from 'react-router-dom'
 import api from '../api/axios'
 import toast from 'react-hot-toast'
 
-const LEVELS = [100, 200, 300, 400, 500]
-
 export default function Register() {
   const navigate = useNavigate()
   const [loading, setLoading] = useState(false)
   const [form, setForm] = useState({
-    email: '', first_name: '', last_name: '',
-    identifier: '', role: 'STUDENT',
-    password: '', password2: '',
-    department: '', level: 100,
+    first_name: '', last_name: '',
+    identifier: '', password: '', password2: '',
   })
 
   const handleChange = (e) => {
@@ -28,19 +24,14 @@ export default function Register() {
     }
     setLoading(true)
     try {
-      const payload = { ...form }
-      if (form.role === 'ADVISOR') {
-        delete payload.department
-        delete payload.level
-      }
-      await api.post('/auth/register/', payload)
+      await api.post('/auth/register/', form)
       toast.success('Account created! Please sign in.')
       navigate('/login')
     } catch (err) {
       const data = err.response?.data
       if (data) {
         const firstError = Object.values(data)[0]
-        toast.error(Array.isArray(firstError) ? firstError[0] : firstError)
+        toast.error(Array.isArray(firstError) ? firstError[0] : String(firstError))
       } else {
         toast.error('Registration failed. Please try again.')
       }
@@ -50,110 +41,168 @@ export default function Register() {
   }
 
   return (
-    <div className="min-h-screen dot-grid flex items-center justify-center p-6">
-      <div className="w-full max-w-lg animate-fade-up">
+    <div className="min-h-screen flex">
 
-        {/* Header */}
-        <div className="text-center mb-8">
-          <Link to="/" className="inline-flex items-center gap-2 mb-6">
+      {/* ── Left panel ── */}
+      <div className="hidden lg:flex flex-col justify-between w-[45%] bg-navy p-12 relative overflow-hidden">
+        <div className="absolute -top-20 -left-20 w-64 h-64 bg-gold/10 rounded-full blur-3xl" />
+        <div className="absolute -bottom-32 -right-16 w-80 h-80 bg-gold/5 rounded-full blur-3xl" />
+
+        <div className="flex items-center gap-3 relative z-10">
+          <div className="w-10 h-10 bg-gold rounded-xl flex items-center justify-center shadow-lg">
+            <span className="text-white font-display font-bold text-lg">U</span>
+          </div>
+          <span className="font-display text-white text-2xl font-semibold">UniHub</span>
+        </div>
+
+        <div className="relative z-10">
+          <h1 className="font-display text-white text-4xl leading-tight mb-4">
+            Manage Your<br />
+            Department, <span className="text-gold">Effortlessly.</span>
+          </h1>
+          <p className="text-navy-200 font-body text-lg leading-relaxed mb-10">
+            Upload results, manage study materials, and keep your students informed — all from one dashboard.
+          </p>
+
+          <div className="space-y-5">
+            {[
+              { icon: '📤', text: 'Upload results via PDF — students auto-created' },
+              { icon: '📊', text: 'CGPA calculated automatically for all students' },
+              { icon: '📢', text: 'Post announcements to reach all students' },
+            ].map(({ icon, text }) => (
+              <div key={text} className="flex items-center gap-4 group">
+                <div className="w-10 h-10 bg-white/10 rounded-xl flex items-center justify-center text-lg
+                                group-hover:bg-gold/20 transition-colors duration-300">
+                  {icon}
+                </div>
+                <span className="text-navy-100 font-body">{text}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        <p className="text-navy-300 font-body text-sm relative z-10">
+          © {new Date().getFullYear()} UniHub · FUTO, Dept. of Computer Science
+        </p>
+      </div>
+
+      {/* ── Right panel ── */}
+      <div className="flex-1 flex items-center justify-center p-6 dot-grid gradient-mesh">
+        <div className="w-full max-w-lg animate-fade-up">
+
+          {/* Mobile logo */}
+          <div className="lg:hidden flex items-center gap-2 mb-8">
             <div className="w-9 h-9 bg-navy rounded-xl flex items-center justify-center">
               <span className="text-white font-display font-bold">U</span>
             </div>
             <span className="font-display text-navy text-xl font-semibold">UniHub</span>
-          </Link>
-          <h2 className="font-display text-navy text-3xl font-semibold mb-1">Create your account</h2>
-          <p className="text-navy-300 font-body">Join the UniHub academic portal</p>
-        </div>
-
-        <div className="card">
-          {/* Role toggle */}
-          <div className="flex rounded-xl bg-navy-50 p-1 mb-6">
-            {['STUDENT', 'ADVISOR'].map((role) => (
-              <button
-                key={role}
-                type="button"
-                onClick={() => setForm((p) => ({ ...p, role }))}
-                className={`flex-1 py-2 rounded-lg text-sm font-medium font-body transition-all duration-200
-                  ${form.role === role
-                    ? 'bg-navy text-white shadow'
-                    : 'text-navy-400 hover:text-navy'
-                  }`}
-              >
-                {role === 'STUDENT' ? '🎒 Student' : '🎓 Course Advisor'}
-              </button>
-            ))}
           </div>
 
-          <form onSubmit={handleSubmit} className="space-y-4">
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <label className="label">First Name</label>
-                <input name="first_name" value={form.first_name} onChange={handleChange} placeholder="Ade" required className="input" />
-              </div>
-              <div>
-                <label className="label">Last Name</label>
-                <input name="last_name" value={form.last_name} onChange={handleChange} placeholder="Bello" required className="input" />
-              </div>
-            </div>
+          <h2 className="font-display text-navy text-3xl font-semibold mb-1">Create your account</h2>
+          <p className="text-navy-300 font-body mb-6">Register as a Course Advisor to get started</p>
 
-            <div>
-              <label className="label">Email Address</label>
-              <input name="email" type="email" value={form.email} onChange={handleChange} placeholder="you@example.com" required className="input" />
-            </div>
+          {/* Advisor badge */}
+          <div className="flex items-center justify-center gap-2 bg-navy-50 rounded-xl py-2.5 px-4 mb-6">
+            <span className="text-lg">🎓</span>
+            <span className="text-navy font-medium font-body text-sm">Course Advisor Registration</span>
+          </div>
 
-            <div>
-              <label className="label">
-                {form.role === 'STUDENT' ? 'Matriculation Number' : 'Staff ID'}
-              </label>
-              <input
-                name="identifier"
-                value={form.identifier}
-                onChange={handleChange}
-                placeholder={form.role === 'STUDENT' ? '20231361001' : 'STAFF/001'}
-                required
-                className="input"
-              />
-            </div>
-
-            {/* Student-only fields */}
-            {form.role === 'STUDENT' && (
-              <div className="grid grid-cols-2 gap-4 animate-fade-in">
+          <div className="card">
+            <form onSubmit={handleSubmit} className="space-y-4">
+              <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <label className="label">Department</label>
-                  <input name="department" value={form.department} onChange={handleChange} placeholder="Computer Science" required className="input" />
+                  <label className="label">First Name</label>
+                  <input
+                    name="first_name"
+                    value={form.first_name}
+                    onChange={handleChange}
+                    placeholder="Ade"
+                    required
+                    className="input"
+                  />
                 </div>
                 <div>
-                  <label className="label">Level</label>
-                  <select name="level" value={form.level} onChange={handleChange} className="input">
-                    {LEVELS.map((l) => <option key={l} value={l}>{l} Level</option>)}
-                  </select>
+                  <label className="label">Last Name</label>
+                  <input
+                    name="last_name"
+                    value={form.last_name}
+                    onChange={handleChange}
+                    placeholder="Bello"
+                    required
+                    className="input"
+                  />
                 </div>
               </div>
-            )}
 
-            <div className="grid grid-cols-2 gap-4">
               <div>
-                <label className="label">Password</label>
-                <input name="password" type="password" value={form.password} onChange={handleChange} placeholder="••••••••" required className="input" />
+                <label className="label">Staff ID</label>
+                <input
+                  name="identifier"
+                  value={form.identifier}
+                  onChange={handleChange}
+                  placeholder="STAFF/001"
+                  required
+                  className="input"
+                />
+                <p className="text-navy-200 text-xs font-body mt-1">
+                  You'll use this to log in
+                </p>
               </div>
-              <div>
-                <label className="label">Confirm Password</label>
-                <input name="password2" type="password" value={form.password2} onChange={handleChange} placeholder="••••••••" required className="input" />
-              </div>
-            </div>
 
-            <button type="submit" disabled={loading} className="btn-primary w-full mt-2">
-              {loading ? 'Creating account...' : 'Create Account'}
-            </button>
-          </form>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="label">Password</label>
+                  <input
+                    name="password"
+                    type="password"
+                    value={form.password}
+                    onChange={handleChange}
+                    placeholder="••••••••"
+                    required
+                    className="input"
+                  />
+                </div>
+                <div>
+                  <label className="label">Confirm Password</label>
+                  <input
+                    name="password2"
+                    type="password"
+                    value={form.password2}
+                    onChange={handleChange}
+                    placeholder="••••••••"
+                    required
+                    className="input"
+                  />
+                </div>
+              </div>
+
+              <button type="submit" disabled={loading} className="btn-primary w-full mt-2">
+                {loading ? (
+                  <span className="flex items-center justify-center gap-2">
+                    <span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                    Creating account...
+                  </span>
+                ) : 'Create Account'}
+              </button>
+            </form>
+          </div>
+
+          {/* Student notice */}
+          <div className="mt-4 p-4 bg-navy-50 rounded-xl text-center">
+            <p className="text-navy-300 font-body text-sm">
+              🎒 <span className="font-medium text-navy">Are you a student?</span> Your account is created
+              automatically when your advisor uploads your results. Login with your
+              <span className="font-medium text-navy"> registration number</span>.
+            </p>
+          </div>
+
+          <p className="text-center text-navy-300 font-body text-sm mt-5">
+            Already have an account?{' '}
+            <Link to="/login" className="text-gold font-medium hover:text-gold-dark transition-colors">
+              Sign in
+            </Link>
+          </p>
         </div>
-
-        <p className="text-center text-navy-300 font-body text-sm mt-5">
-          Already have an account?{' '}
-          <Link to="/login" className="text-gold font-medium hover:text-gold-dark transition-colors">
-            Sign in
-          </Link>
-        </p>
       </div>
     </div>
   )

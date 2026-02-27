@@ -3,6 +3,9 @@
 @tailwind utilities;
 
 @layer base {
+  html {
+    scroll-behavior: smooth;
+  }
   body {
     @apply bg-cream font-body text-navy antialiased;
   }
@@ -12,51 +15,93 @@
 }
 
 @layer components {
+  /* ── Buttons ─────────────────────────────────────────────── */
   .btn-primary {
-    @apply bg-navy text-white px-6 py-2.5 rounded-lg font-body font-medium
-           hover:bg-navy-600 active:scale-95 transition-all duration-200
-           disabled:opacity-50 disabled:cursor-not-allowed;
+    @apply bg-navy text-white px-6 py-2.5 rounded-xl font-body font-medium
+           hover:bg-navy-600 active:scale-[0.97] transition-all duration-200
+           disabled:opacity-50 disabled:cursor-not-allowed
+           shadow-md hover:shadow-lg;
   }
   .btn-gold {
-    @apply bg-gold text-white px-6 py-2.5 rounded-lg font-body font-medium
-           hover:bg-gold-dark active:scale-95 transition-all duration-200
-           disabled:opacity-50 disabled:cursor-not-allowed;
+    @apply bg-gold text-white px-6 py-2.5 rounded-xl font-body font-medium
+           hover:bg-gold-dark active:scale-[0.97] transition-all duration-200
+           disabled:opacity-50 disabled:cursor-not-allowed
+           shadow-md hover:shadow-lg;
   }
   .btn-outline {
-    @apply border-2 border-navy text-navy px-6 py-2.5 rounded-lg font-body font-medium
-           hover:bg-navy hover:text-white active:scale-95 transition-all duration-200;
+    @apply border-2 border-navy text-navy px-6 py-2.5 rounded-xl font-body font-medium
+           hover:bg-navy hover:text-white active:scale-[0.97] transition-all duration-200;
   }
+  .btn-ghost {
+    @apply text-navy-400 px-4 py-2 rounded-xl font-body font-medium
+           hover:bg-navy-50 hover:text-navy active:scale-[0.97] transition-all duration-200;
+  }
+
+  /* ── Cards ───────────────────────────────────────────────── */
   .card {
     @apply bg-white rounded-2xl shadow-card p-6 border border-navy-50;
   }
+  .glass-card {
+    @apply rounded-2xl p-6 border border-white/20
+           backdrop-blur-xl bg-white/60 shadow-card;
+  }
+
+  /* ── Inputs ──────────────────────────────────────────────── */
   .input {
-    @apply w-full px-4 py-3 rounded-lg border border-navy-100 bg-white
+    @apply w-full px-4 py-3 rounded-xl border border-navy-100 bg-white
            font-body text-navy placeholder-navy-200
-           focus:outline-none focus:ring-2 focus:ring-gold focus:border-transparent
+           focus:outline-none focus:ring-2 focus:ring-gold/50 focus:border-gold
            transition-all duration-200;
   }
   .label {
     @apply block text-sm font-medium text-navy-400 mb-1.5;
   }
+
+  /* ── Badges ──────────────────────────────────────────────── */
   .badge-normal    { @apply bg-navy-50 text-navy-400 text-xs font-medium px-2.5 py-1 rounded-full; }
   .badge-important { @apply bg-amber-100 text-amber-700 text-xs font-medium px-2.5 py-1 rounded-full; }
   .badge-urgent    { @apply bg-red-100 text-red-700 text-xs font-medium px-2.5 py-1 rounded-full; }
 
+  /* ── Grade colors ────────────────────────────────────────── */
   .grade-A { @apply text-emerald-600 font-semibold; }
   .grade-B { @apply text-blue-600 font-semibold; }
   .grade-C { @apply text-amber-600 font-semibold; }
   .grade-D { @apply text-orange-500 font-semibold; }
   .grade-E { @apply text-red-500 font-semibold; }
   .grade-F { @apply text-red-700 font-bold; }
+
+  /* ── Shimmer loading skeleton ────────────────────────────── */
+  .skeleton {
+    @apply bg-gradient-to-r from-navy-50 via-white to-navy-50 rounded-xl animate-pulse;
+    background-size: 200% 100%;
+  }
 }
 
-/* Subtle dot-grid background */
+/* ── Dot-grid background ─────────────────────────────────── */
 .dot-grid {
-  background-image: radial-gradient(circle, #0F204420 1px, transparent 1px);
+  background-image: radial-gradient(circle, #0F204412 1px, transparent 1px);
   background-size: 28px 28px;
 }
 
-/* Scrollbar */
+/* ── Gradient mesh (login/register panels) ───────────────── */
+.gradient-mesh {
+  background:
+    radial-gradient(at 20% 20%, rgba(201,151,42,0.15) 0, transparent 50%),
+    radial-gradient(at 80% 80%, rgba(15,32,68,0.12) 0, transparent 50%),
+    radial-gradient(at 60% 30%, rgba(201,151,42,0.08) 0, transparent 45%);
+}
+
+/* ── Scrollbar ───────────────────────────────────────────── */
 ::-webkit-scrollbar { width: 6px; }
 ::-webkit-scrollbar-track { background: #FAF8F3; }
 ::-webkit-scrollbar-thumb { background: #C5D1E8; border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: #8BA3CC; }
+
+/* ── Glow ring for interactive cards ─────────────────────── */
+.hover-glow {
+  transition: box-shadow 0.3s ease, transform 0.3s ease;
+}
+.hover-glow:hover {
+  box-shadow: 0 0 24px rgba(201,151,42,0.15), 0 8px 32px rgba(15,32,68,0.08);
+  transform: translateY(-2px);
+}

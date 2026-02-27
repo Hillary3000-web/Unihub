@@ -1,5 +1,9 @@
 """
 users/views.py
+
+Simplified auth flows:
+- Advisors: register with name + staff ID + password, login with staff ID + password
+- Students: login with reg number only (reg number = password, auto-created from PDF)
 """
 
 from rest_framework import generics, status
@@ -9,12 +13,18 @@ from rest_framework.permissions import IsAuthenticated, AllowAny
 from rest_framework_simplejwt.views import TokenObtainPairView
 from rest_framework_simplejwt.tokens import RefreshToken
 from rest_framework_simplejwt.exceptions import TokenError
+from django.contrib.auth import authenticate
 
-from .serializers import RegisterSerializer, UserMeSerializer, CustomTokenObtainPairSerializer
+from .serializers import (
+    RegisterSerializer,
+    UserMeSerializer,
+    CustomTokenObtainPairSerializer,
+    StudentLoginSerializer,
+)
 
 
 class RegisterView(generics.CreateAPIView):
-    """POST /api/auth/register/ — Open. Creates Student or Advisor account."""
+    """POST /api/auth/register/ — Open. Creates Advisor account."""
     permission_classes = [AllowAny]
     serializer_class = RegisterSerializer
 
@@ -25,18 +35,60 @@ class RegisterView(generics.CreateAPIView):
         return Response(
             {
                 "message": f"Account created successfully. Welcome, {user.get_full_name()}!",
-                "email": user.email,
-                "role": user.role,
                 "identifier": user.identifier,
+                "role": user.role,
             },
             status=status.HTTP_201_CREATED,
         )
 
 
 class LoginView(TokenObtainPairView):
-    """POST /api/auth/login/ — Open. Returns access + refresh tokens with role info."""
+    """POST /api/auth/login/ — Advisor login with staff ID + password."""
     permission_classes = [AllowAny]
     serializer_class = CustomTokenObtainPairSerializer
+
+
+class StudentLoginView(APIView):
+    """
+    POST /api/auth/student-login/
+    Students log in with their registration number only.
+    The reg number serves as both username and password.
+    """
+    permission_classes = [AllowAny]
+
+    def post(self, request):
+        serializer = StudentLoginSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        reg_number = serializer.validated_data["reg_number"].strip()
+
+        from .models import CustomUser
+        # Look up the student by identifier (reg number)
+        try:
+            student = CustomUser.objects.get(identifier__iexact=reg_number, role="STUDENT")
+        except CustomUser.DoesNotExist:
+            return Response(
+                {"detail": "No student found with this registration number. Please contact your Course Advisor."},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+
+        # Authenticate using reg number as password
+        user = authenticate(request, email=student.email, password=reg_number)
+        if not user:
+            return Response(
+                {"detail": "Authentication failed. Your default password is your registration number."},
+                status=status.HTTP_401_UNAUTHORIZED,
+            )
+
+        # Issue JWT tokens
+        refresh = RefreshToken.for_user(user)
+        return Response({
+            "access":     str(refresh.access_token),
+            "refresh":    str(refresh),
+            "role":       user.role,
+            "full_name":  user.get_full_name(),
+            "identifier": user.identifier,
+            "email":      user.email,
+        })
 
 
 class LogoutView(APIView):

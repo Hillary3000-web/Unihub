@@ -1,54 +1,57 @@
 import { Routes, Route, Navigate } from 'react-router-dom'
 import { useAuth } from './context/AuthContext'
-import Login            from './pages/Login'
-import Register         from './pages/Register'
-import StudentDashboard from './pages/StudentDashboard'
 import AdvisorDashboard from './pages/AdvisorDashboard'
-import ResourceHub      from './pages/ResourceHub'
+import StudentDashboard from './pages/StudentDashboard'
+import ResourceHub from './pages/ResourceHub'
+import Login from './pages/Login'
+import Register from './pages/Register'
 
-function ProtectedRoute({ children, role }) {
+function ProtectedRoute({ children, allowedRole }) {
   const { user, loading } = useAuth()
-  if (loading) return <div className="h-screen flex items-center justify-center text-navy font-body">Loading...</div>
-  if (!user)   return <Navigate to="/login" replace />
-  if (role && user.role !== role) return <Navigate to="/" replace />
+
+  if (loading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-cream">
+        <div className="flex flex-col items-center gap-4">
+          <div className="w-12 h-12 border-4 border-navy/20 border-t-navy rounded-full animate-spin" />
+          <p className="text-navy-300 font-body text-sm animate-pulse">Loading UniHub...</p>
+        </div>
+      </div>
+    )
+  }
+
+  if (!user) return <Navigate to="/login" replace />
+
+  if (allowedRole && user.role !== allowedRole) {
+    return <Navigate to={user.role === 'ADVISOR' ? '/advisor' : '/dashboard'} replace />
+  }
+
   return children
 }
 
-function HomeRedirect() {
+function AuthRoute({ children }) {
   const { user, loading } = useAuth()
   if (loading) return null
-  if (!user)   return <Navigate to="/login" replace />
-  return user.role === 'ADVISOR'
-    ? <Navigate to="/advisor" replace />
-    : <Navigate to="/dashboard" replace />
+  if (user) {
+    return <Navigate to={user.role === 'ADVISOR' ? '/advisor' : '/dashboard'} replace />
+  }
+  return children
 }
 
 export default function App() {
   return (
     <Routes>
-      <Route path="/"         element={<HomeRedirect />} />
-      <Route path="/login"    element={<Login />} />
-      <Route path="/register" element={<Register />} />
+      {/* Public auth pages */}
+      <Route path="/login" element={<AuthRoute><Login /></AuthRoute>} />
+      <Route path="/register" element={<AuthRoute><Register /></AuthRoute>} />
 
-      <Route path="/dashboard" element={
-        <ProtectedRoute role="STUDENT">
-          <StudentDashboard />
-        </ProtectedRoute>
-      } />
+      {/* Protected pages */}
+      <Route path="/advisor" element={<ProtectedRoute allowedRole="ADVISOR"><AdvisorDashboard /></ProtectedRoute>} />
+      <Route path="/dashboard" element={<ProtectedRoute allowedRole="STUDENT"><StudentDashboard /></ProtectedRoute>} />
+      <Route path="/resources" element={<ProtectedRoute><ResourceHub /></ProtectedRoute>} />
 
-      <Route path="/advisor" element={
-        <ProtectedRoute role="ADVISOR">
-          <AdvisorDashboard />
-        </ProtectedRoute>
-      } />
-
-      <Route path="/resources" element={
-        <ProtectedRoute>
-          <ResourceHub />
-        </ProtectedRoute>
-      } />
-
-      <Route path="*" element={<Navigate to="/" replace />} />
+      {/* Catch-all redirect */}
+      <Route path="*" element={<Navigate to="/login" replace />} />
     </Routes>
   )
 }
