@@ -141,18 +141,39 @@ The app will be available at `http://localhost:5173/`.
 
 ---
 
+## Auth Flow
+
+```
+Advisor registers (name + staff ID + password)
+  → Advisor logs in (staff ID + password)
+    → Uploads PDF/Excel results
+      → Student accounts auto-created from result data
+        → Student logs in (matric number only)
+          → Student Dashboard (results, CGPA, announcements)
+```
+
+---
+
 ## Environment Variables
 
-Create a `.env` file in the project root for production configuration:
+Set these on Render (backend) and Vercel (frontend):
 
-```env
-SECRET_KEY=your-secret-key
-DEBUG=False
-ALLOWED_HOSTS=your-domain.onrender.com,localhost
-DATABASE_URL=postgresql://user:pass@host:5432/dbname
-CORS_ALLOWED_ORIGINS=https://your-frontend.vercel.app
-CSRF_TRUSTED_ORIGINS=https://your-frontend.vercel.app
-```
+### Backend (Render)
+
+| Variable | Description |
+|----------|-------------|
+| `SECRET_KEY` | Random 50+ character string |
+| `DEBUG` | `False` |
+| `ALLOWED_HOSTS` | `your-app.onrender.com` |
+| `DATABASE_URL` | Auto-set when you add a Render PostgreSQL instance |
+| `CORS_ALLOWED_ORIGINS` | `https://your-frontend.vercel.app` |
+| `CSRF_TRUSTED_ORIGINS` | `https://your-frontend.vercel.app` |
+
+### Frontend (Vercel)
+
+| Variable | Description |
+|----------|-------------|
+| `VITE_API_URL` | Full backend URL, e.g. `https://your-app.onrender.com/api` |
 
 ---
 
@@ -163,14 +184,23 @@ CSRF_TRUSTED_ORIGINS=https://your-frontend.vercel.app
 1. Connect the GitHub repo to a new **Web Service** on Render.
 2. Set the **Build Command** to `bash build.sh`.
 3. Set the **Start Command** to `gunicorn backend.wsgi:application`.
-4. Add a **PostgreSQL** database and set `DATABASE_URL` in the environment.
-5. Add the remaining environment variables listed above.
+4. Add a **PostgreSQL** database (auto-sets `DATABASE_URL`).
+5. Add the remaining environment variables from the table above.
 
 ### Frontend → Vercel
 
 1. Import the repo on Vercel and set the **Root Directory** to `frontend`.
-2. The build command (`npm run build`) and output (`dist`) will be auto-detected.
-3. Add an environment variable `VITE_API_URL` pointing to your Render backend URL.
+2. The build command (`npm run build`) and output directory (`dist`) will be auto-detected.
+3. Add the `VITE_API_URL` environment variable pointing to your Render backend.
+
+### Free-Plan Notes
+
+| Constraint | Impact |
+|------------|--------|
+| **Spins down after 15 min idle** | First request after idle takes ~30–50s (cold start) |
+| **No persistent disk** | Uploaded files (`/media/`) are lost on redeploy — consider Cloudinary/S3 for file storage |
+| **PostgreSQL free tier** | 1 GB storage, expires after 90 days |
+| **512 MB RAM** | Sufficient for Django + Gunicorn |
 
 ---
 
