@@ -1,9 +1,7 @@
-"""
-results/urls.py — Mounted at /api/ in backend/urls.py
-"""
-
 from django.urls import path
 from .views import (
+    # Universities
+    UniversityListView,
     # Results
     CourseListView,
     MyResultsView,
@@ -24,6 +22,10 @@ from .views import (
 )
 
 urlpatterns = [
+
+    # ── Universities (public) ──────────────────────────────────────────────────
+    path("universities/",                   UniversityListView.as_view(),      name="university-list"),
+
 
     # ── Courses ────────────────────────────────────────────────────────────────
     path("courses/",                        CourseListView.as_view(),          name="course-list"),

@@ -5,17 +5,29 @@ from django.conf import settings
 # ─── Course ────────────────────────────────────────────────────────────────────
 
 class Course(models.Model):
-    code        = models.CharField(max_length=20, unique=True, help_text="e.g. CSC301")
+    code        = models.CharField(max_length=20, help_text="e.g. CSC301")
     title       = models.CharField(max_length=200)
     unit        = models.PositiveSmallIntegerField(help_text="Credit units, e.g. 3")
     semester    = models.CharField(max_length=20, default="First")
     session     = models.CharField(max_length=20, help_text="e.g. 2023/2024")
 
+    # Institution link
+    university = models.ForeignKey(
+        "users.University",
+        on_delete=models.CASCADE,
+        null=True,
+        blank=True,
+        related_name="courses",
+    )
+
     class Meta:
+        # Course code is unique per university (different unis can have same code)
+        unique_together = ["university", "code"]
         ordering = ["code"]
 
     def __str__(self):
-        return f"{self.code} — {self.title} ({self.unit} units)"
+        uni = self.university.short_name if self.university else "—"
+        return f"{self.code} — {self.title} ({self.unit} units) [{uni}]"
 
 
 # ─── Result ────────────────────────────────────────────────────────────────────
@@ -90,6 +102,16 @@ class StudyMaterial(models.Model):
         on_delete=models.CASCADE,
         related_name="uploaded_materials",
     )
+
+    # Institution link
+    university = models.ForeignKey(
+        "users.University",
+        on_delete=models.CASCADE,
+        null=True,
+        blank=True,
+        related_name="materials",
+    )
+
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
@@ -120,6 +142,16 @@ class Announcement(models.Model):
         null=True,
         related_name="announcements",
     )
+
+    # Institution link
+    university = models.ForeignKey(
+        "users.University",
+        on_delete=models.CASCADE,
+        null=True,
+        blank=True,
+        related_name="announcements",
+    )
+
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:

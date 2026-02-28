@@ -208,7 +208,7 @@ export default function AdvisorDashboard() {
             Welcome, {user?.first_name} 👋
           </h1>
           <p className="text-navy-300 font-body mt-1">
-            {user?.identifier} · Course Advisor Dashboard
+            {user?.identifier} · {user?.university_info?.short_name || 'UniHub'} · Course Advisor Dashboard
           </p>
         </div>
 
@@ -473,10 +473,10 @@ export default function AdvisorDashboard() {
                                           <div className="flex items-center gap-2">
                                             <span className="text-navy-300 text-xs">{Number(r.score).toFixed(0)}%</span>
                                             <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${r.grade === 'A' ? 'bg-emerald-50 text-emerald-700' :
-                                                r.grade === 'B' ? 'bg-blue-50 text-blue-700' :
-                                                  r.grade === 'C' ? 'bg-amber-50 text-amber-700' :
-                                                    r.grade === 'D' ? 'bg-orange-50 text-orange-700' :
-                                                      'bg-red-50 text-red-600'
+                                              r.grade === 'B' ? 'bg-blue-50 text-blue-700' :
+                                                r.grade === 'C' ? 'bg-amber-50 text-amber-700' :
+                                                  r.grade === 'D' ? 'bg-orange-50 text-orange-700' :
+                                                    'bg-red-50 text-red-600'
                                               }`}>{r.grade}</span>
                                           </div>
                                         </div>

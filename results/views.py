@@ -31,8 +31,34 @@ from .serializers import (
     StudentSummarySerializer,
 )
 from .permissions import IsAdvisor, IsStudent
+from users.models import University, Department
 
 User = get_user_model()
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+#  UNIVERSITY / INSTITUTION VIEWS
+# ══════════════════════════════════════════════════════════════════════════════
+
+class UniversityListView(APIView):
+    """GET /api/universities/ — Public. Returns all universities for registration dropdown."""
+    permission_classes = [AllowAny]
+
+    def get(self, request):
+        unis = University.objects.all()
+        data = [
+            {
+                "id": u.id,
+                "name": u.name,
+                "short_name": u.short_name,
+                "departments": [
+                    {"id": d.id, "name": d.name}
+                    for d in u.departments.all()
+                ],
+            }
+            for u in unis.prefetch_related("departments")
+        ]
+        return Response(data)
 
 # ── FUTO Year 1 course registry (ordered — matches PDF column order) ──────────
 COURSE_ORDER = [
@@ -153,10 +179,15 @@ def calculate_cgpa(results):
 
 
 class CourseListView(generics.ListAPIView):
-    """GET /api/courses/ — List all courses."""
-    queryset           = Course.objects.all()
+    """GET /api/courses/ — List courses for user's university."""
     serializer_class   = CourseSerializer
     permission_classes = [IsAuthenticated]
+
+    def get_queryset(self):
+        uni = self.request.user.university
+        if uni:
+            return Course.objects.filter(university=uni)
+        return Course.objects.all()
 
 
 class MyResultsView(APIView):
@@ -174,12 +205,15 @@ class MyResultsView(APIView):
 
 
 class AllResultsView(generics.ListAPIView):
-    """GET /api/results/all/ — Advisor views all results. Filter by ?matric="""
+    """GET /api/results/all/ — Advisor views results scoped to their university."""
     serializer_class   = ResultAdminSerializer
     permission_classes = [IsAuthenticated, IsAdvisor]
 
     def get_queryset(self):
-        qs     = Result.objects.select_related("student", "course").all()
+        uni = self.request.user.university
+        qs  = Result.objects.select_related("student", "course").all()
+        if uni:
+            qs = qs.filter(student__university=uni)
         matric = self.request.query_params.get("matric")
         if matric:
             qs = qs.filter(student__identifier__iexact=matric)
@@ -195,7 +229,11 @@ class StudentListView(APIView):
     permission_classes = [IsAuthenticated, IsAdvisor]
 
     def get(self, request):
-        students = User.objects.filter(role="STUDENT").prefetch_related("results__course")
+        uni = request.user.university
+        students = User.objects.filter(role="STUDENT")
+        if uni:
+            students = students.filter(university=uni)
+        students = students.prefetch_related("results__course")
         search = request.query_params.get("search", "").strip()
         if search:
             from django.db.models import Q
@@ -214,7 +252,10 @@ class StudentDetailView(APIView):
 
     def get(self, request, identifier):
         try:
-            student = User.objects.get(identifier__iexact=identifier, role="STUDENT")
+            filters = {"identifier__iexact": identifier, "role": "STUDENT"}
+            if request.user.university:
+                filters["university"] = request.user.university
+            student = User.objects.get(**filters)
         except User.DoesNotExist:
             return Response({"error": "Student not found."}, status=status.HTTP_404_NOT_FOUND)
 
@@ -484,7 +525,10 @@ class StudyMaterialListView(generics.ListAPIView):
     permission_classes = [IsAuthenticated]
 
     def get_queryset(self):
-        qs          = StudyMaterial.objects.select_related("uploaded_by").all()
+        uni = self.request.user.university
+        qs  = StudyMaterial.objects.select_related("uploaded_by").all()
+        if uni:
+            qs = qs.filter(university=uni)
         course_code = self.request.query_params.get("course")
         mat_type    = self.request.query_params.get("type")
         if course_code:
@@ -503,7 +547,7 @@ class StudyMaterialUploadView(generics.CreateAPIView):
     parser_classes     = [MultiPartParser, FormParser]
 
     def perform_create(self, serializer):
-        serializer.save(uploaded_by=self.request.user)
+        serializer.save(uploaded_by=self.request.user, university=self.request.user.university)
 
     def create(self, request, *args, **kwargs):
         serializer = self.get_serializer(data=request.data)
@@ -542,7 +586,10 @@ class AnnouncementListView(generics.ListAPIView):
     permission_classes = [IsAuthenticated]
 
     def get_queryset(self):
-        qs       = Announcement.objects.select_related("posted_by").all()
+        uni = self.request.user.university
+        qs  = Announcement.objects.select_related("posted_by").all()
+        if uni:
+            qs = qs.filter(university=uni)
         priority = self.request.query_params.get("priority")
         if priority:
             qs = qs.filter(priority__iexact=priority)
@@ -554,7 +601,7 @@ class AnnouncementCreateView(generics.CreateAPIView):
     permission_classes = [IsAuthenticated, IsAdvisor]
 
     def perform_create(self, serializer):
-        serializer.save(posted_by=self.request.user)
+        serializer.save(posted_by=self.request.user, university=self.request.user.university)
 
     def create(self, request, *args, **kwargs):
         serializer = self.get_serializer(data=request.data)

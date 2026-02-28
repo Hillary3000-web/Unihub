@@ -139,7 +139,7 @@ export default function StudentDashboard() {
             Hello, {user?.first_name} 👋
           </h1>
           <p className="text-navy-300 font-body mt-1">
-            {user?.identifier} · {user?.student_profile?.department} · {user?.student_profile?.level} Level
+            {user?.identifier} · {user?.university_info?.short_name || ''} · {user?.student_profile?.department} · {user?.student_profile?.level} Level
           </p>
         </div>
 

@@ -3,11 +3,43 @@ users/models.py
 
 CustomUser replaces Django's default User.
 Roles: STUDENT | ADVISOR
+Multi-institution: Users belong to a University.
 """
 
 from django.db import models
 from django.contrib.auth.models import AbstractBaseUser, PermissionsMixin, BaseUserManager
 
+
+# ─── Institution models ───────────────────────────────────────────────────────
+
+class University(models.Model):
+    """A Nigerian university or institution."""
+    name       = models.CharField(max_length=200, unique=True)
+    short_name = models.CharField(max_length=20, unique=True, help_text="e.g. FUTO, UNILAG")
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        verbose_name_plural = "Universities"
+        ordering = ["name"]
+
+    def __str__(self):
+        return f"{self.short_name} — {self.name}"
+
+
+class Department(models.Model):
+    """A department within a university."""
+    university = models.ForeignKey(University, on_delete=models.CASCADE, related_name="departments")
+    name       = models.CharField(max_length=200)
+
+    class Meta:
+        unique_together = ["university", "name"]
+        ordering = ["name"]
+
+    def __str__(self):
+        return f"{self.name} ({self.university.short_name})"
+
+
+# ─── Custom User ──────────────────────────────────────────────────────────────
 
 class CustomUserManager(BaseUserManager):
     """Manager using email as the unique login identifier."""
@@ -32,8 +64,9 @@ class CustomUserManager(BaseUserManager):
 class CustomUser(AbstractBaseUser, PermissionsMixin):
     """
     Core UniHub user.
-    Students log in with matric number (identifier) e.g. CSC/2021/001
+    Students log in with matric number (identifier).
     Advisors log in with their Staff ID.
+    All users belong to a University.
     """
 
     class Role(models.TextChoices):
@@ -53,6 +86,15 @@ class CustomUser(AbstractBaseUser, PermissionsMixin):
 
     role = models.CharField(max_length=10, choices=Role.choices, default=Role.STUDENT)
 
+    # Institution link — nullable for backwards compat during migration
+    university = models.ForeignKey(
+        University,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="users",
+    )
+
     is_active = models.BooleanField(default=True)
     is_staff = models.BooleanField(default=False)
     date_joined = models.DateTimeField(auto_now_add=True)
@@ -68,7 +110,8 @@ class CustomUser(AbstractBaseUser, PermissionsMixin):
         ordering = ["-date_joined"]
 
     def __str__(self):
-        return f"{self.get_full_name()} ({self.role}) — {self.identifier}"
+        uni = self.university.short_name if self.university else "—"
+        return f"{self.get_full_name()} ({self.role}) — {self.identifier} [{uni}]"
 
     def get_full_name(self):
         return f"{self.first_name} {self.last_name}".strip()
@@ -97,8 +140,18 @@ class StudentProfile(models.Model):
         on_delete=models.CASCADE,
         related_name="student_profile",
     )
-    department = models.CharField(max_length=100)
+    # Legacy text field — kept for backward compatibility
+    department = models.CharField(max_length=100, blank=True, default="")
+    # New FK to Department model
+    dept = models.ForeignKey(
+        Department,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="students",
+    )
     level = models.IntegerField(choices=Level.choices, default=Level.L100)
 
     def __str__(self):
-        return f"{self.user.get_full_name()} — {self.department} ({self.level}L)"
+        dept_name = self.dept.name if self.dept else self.department
+        return f"{self.user.get_full_name()} — {dept_name} ({self.level}L)"

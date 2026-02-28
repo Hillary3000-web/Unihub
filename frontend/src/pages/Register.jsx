@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import api from '../api/axios'
 import toast from 'react-hot-toast'
@@ -6,14 +6,31 @@ import toast from 'react-hot-toast'
 export default function Register() {
   const navigate = useNavigate()
   const [loading, setLoading] = useState(false)
+  const [universities, setUniversities] = useState([])
   const [form, setForm] = useState({
     first_name: '', last_name: '',
     identifier: '', password: '', password2: '',
+    university: '', department: '',
   })
+
+  // Fetch universities on mount
+  useEffect(() => {
+    api.get('/universities/')
+      .then(({ data }) => setUniversities(data))
+      .catch(() => { })
+  }, [])
+
+  const selectedUni = universities.find(u => u.id === Number(form.university))
+  const departments = selectedUni?.departments || []
 
   const handleChange = (e) => {
     const { name, value } = e.target
-    setForm((prev) => ({ ...prev, [name]: value }))
+    setForm((prev) => {
+      const updated = { ...prev, [name]: value }
+      // Reset department when university changes
+      if (name === 'university') updated.department = ''
+      return updated
+    })
   }
 
   const handleSubmit = async (e) => {
@@ -22,9 +39,16 @@ export default function Register() {
       toast.error('Passwords do not match!')
       return
     }
+    if (!form.university) {
+      toast.error('Please select your university.')
+      return
+    }
     setLoading(true)
     try {
-      await api.post('/auth/register/', form)
+      await api.post('/auth/register/', {
+        ...form,
+        university: Number(form.university),
+      })
       toast.success('Account created! Please sign in.')
       navigate('/login')
     } catch (err) {
@@ -66,9 +90,9 @@ export default function Register() {
 
           <div className="space-y-5">
             {[
-              { icon: '📤', text: 'Upload results via PDF — students auto-created' },
+              { icon: '🏫', text: 'Works for any Nigerian university' },
+              { icon: '📤', text: 'Upload results via PDF or Excel — students auto-created' },
               { icon: '📊', text: 'CGPA calculated automatically for all students' },
-              { icon: '📢', text: 'Post announcements to reach all students' },
             ].map(({ icon, text }) => (
               <div key={text} className="flex items-center gap-4 group">
                 <div className="w-10 h-10 bg-white/10 rounded-xl flex items-center justify-center text-lg
@@ -82,7 +106,7 @@ export default function Register() {
         </div>
 
         <p className="text-navy-300 font-body text-sm relative z-10">
-          © {new Date().getFullYear()} UniHub · FUTO, Dept. of Computer Science
+          © {new Date().getFullYear()} UniHub · Student Academic Portal
         </p>
       </div>
 
@@ -132,6 +156,54 @@ export default function Register() {
                     className="input"
                   />
                 </div>
+              </div>
+
+              {/* University dropdown */}
+              <div>
+                <label className="label">University</label>
+                <select
+                  name="university"
+                  value={form.university}
+                  onChange={handleChange}
+                  required
+                  className="input"
+                >
+                  <option value="">Select your university</option>
+                  {universities.map(u => (
+                    <option key={u.id} value={u.id}>
+                      {u.short_name} — {u.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              {/* Department */}
+              <div>
+                <label className="label">Department</label>
+                {departments.length > 0 ? (
+                  <select
+                    name="department"
+                    value={form.department}
+                    onChange={handleChange}
+                    className="input"
+                  >
+                    <option value="">Select or type a department</option>
+                    {departments.map(d => (
+                      <option key={d.id} value={d.name}>{d.name}</option>
+                    ))}
+                  </select>
+                ) : (
+                  <input
+                    name="department"
+                    value={form.department}
+                    onChange={handleChange}
+                    placeholder="e.g. Computer Science"
+                    className="input"
+                  />
+                )}
+                <p className="text-navy-200 text-xs font-body mt-1">
+                  Your department will be created if it doesn't exist
+                </p>
               </div>
 
               <div>
