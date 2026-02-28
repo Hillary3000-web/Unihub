@@ -278,8 +278,7 @@ class UploadPDFResultsView(APIView):
     No auth required during testing phase.
     Parses FUTO results PDF → creates student accounts → saves grades.
     """
-    authentication_classes = []
-    permission_classes     = [AllowAny]
+    permission_classes     = [IsAuthenticated, IsAdvisor]
     parser_classes         = [MultiPartParser, FormParser]
 
     def post(self, request):
@@ -318,9 +317,11 @@ class UploadPDFResultsView(APIView):
         with transaction.atomic():
             # Ensure all courses exist in DB
             course_objs = {}
+            advisor_uni = request.user.university
             for code, title, units in COURSE_ORDER:
                 course, _ = Course.objects.get_or_create(
                     code=code,
+                    university=advisor_uni,
                     defaults={
                         "title":    title,
                         "unit":     units,
@@ -355,6 +356,7 @@ class UploadPDFResultsView(APIView):
                             last_name  = last_name,
                             identifier = reg_no,
                             role       = "STUDENT",
+                            university = advisor_uni,
                         )
                         StudentProfile.objects.create(
                             user       = student,
@@ -461,6 +463,7 @@ class UploadResultsView(APIView):
                         last_name  = last_name,
                         identifier = matric,
                         role       = "STUDENT",
+                        university = request.user.university,
                     )
                     StudentProfile.objects.get_or_create(
                         user     = student,
@@ -488,6 +491,7 @@ class UploadResultsView(APIView):
                     title, units = FUTO_YEAR1_COURSES[course_code]
                     course, _    = Course.objects.get_or_create(
                         code=course_code,
+                        university=request.user.university,
                         defaults={"title": title, "unit": units, "semester": "Harmattan", "session": "2023/2024"},
                     )
 
