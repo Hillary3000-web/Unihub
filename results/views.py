@@ -187,7 +187,7 @@ class CourseListView(generics.ListAPIView):
         uni = self.request.user.university
         if uni:
             return Course.objects.filter(university=uni)
-        return Course.objects.all()
+        return Course.objects.none()
 
 
 class MyResultsView(APIView):
@@ -211,9 +211,9 @@ class AllResultsView(generics.ListAPIView):
 
     def get_queryset(self):
         uni = self.request.user.university
-        qs  = Result.objects.select_related("student", "course").all()
-        if uni:
-            qs = qs.filter(student__university=uni)
+        if not uni:
+            return Result.objects.none()
+        qs = Result.objects.select_related("student", "course").filter(student__university=uni)
         matric = self.request.query_params.get("matric")
         if matric:
             qs = qs.filter(student__identifier__iexact=matric)
@@ -230,9 +230,9 @@ class StudentListView(APIView):
 
     def get(self, request):
         uni = request.user.university
-        students = User.objects.filter(role="STUDENT")
-        if uni:
-            students = students.filter(university=uni)
+        if not uni:
+            return Response({"count": 0, "students": []})
+        students = User.objects.filter(role="STUDENT", university=uni)
         students = students.prefetch_related("results__course")
         search = request.query_params.get("search", "").strip()
         if search:
@@ -407,8 +407,7 @@ class UploadPDFResultsView(APIView):
 @method_decorator(csrf_exempt, name='dispatch')
 class UploadResultsView(APIView):
     """POST /api/results/upload/ — Advisor bulk uploads FUTO Excel sheet."""
-    authentication_classes = []
-    permission_classes     = [AllowAny]
+    permission_classes     = [IsAuthenticated, IsAdvisor]
     parser_classes         = [MultiPartParser, FormParser]
     COURSE_COLUMNS         = [code for code, _, _ in COURSE_ORDER]
 
@@ -530,9 +529,9 @@ class StudyMaterialListView(generics.ListAPIView):
 
     def get_queryset(self):
         uni = self.request.user.university
-        qs  = StudyMaterial.objects.select_related("uploaded_by").all()
-        if uni:
-            qs = qs.filter(university=uni)
+        if not uni:
+            return StudyMaterial.objects.none()
+        qs = StudyMaterial.objects.select_related("uploaded_by").filter(university=uni)
         course_code = self.request.query_params.get("course")
         mat_type    = self.request.query_params.get("type")
         if course_code:
@@ -591,9 +590,9 @@ class AnnouncementListView(generics.ListAPIView):
 
     def get_queryset(self):
         uni = self.request.user.university
-        qs  = Announcement.objects.select_related("posted_by").all()
-        if uni:
-            qs = qs.filter(university=uni)
+        if not uni:
+            return Announcement.objects.none()
+        qs = Announcement.objects.select_related("posted_by").filter(university=uni)
         priority = self.request.query_params.get("priority")
         if priority:
             qs = qs.filter(priority__iexact=priority)
@@ -618,7 +617,12 @@ class AnnouncementCreateView(generics.CreateAPIView):
 
 
 class AnnouncementDetailView(generics.RetrieveUpdateDestroyAPIView):
-    queryset = Announcement.objects.all()
+
+    def get_queryset(self):
+        uni = self.request.user.university
+        if not uni:
+            return Announcement.objects.none()
+        return Announcement.objects.filter(university=uni)
 
     def get_serializer_class(self):
         if self.request.method in ("PUT", "PATCH"):
