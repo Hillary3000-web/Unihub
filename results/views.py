@@ -28,6 +28,7 @@ from .serializers import (
     StudyMaterialUploadSerializer,
     AnnouncementSerializer,
     AnnouncementCreateSerializer,
+    StudentSummarySerializer,
 )
 from .permissions import IsAdvisor, IsStudent
 
@@ -183,6 +184,50 @@ class AllResultsView(generics.ListAPIView):
         if matric:
             qs = qs.filter(student__identifier__iexact=matric)
         return qs
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+#  STUDENT VIEWS (Advisor)
+# ══════════════════════════════════════════════════════════════════════════════
+
+class StudentListView(APIView):
+    """GET /api/students/ — Advisor views all students with CGPA summary."""
+    permission_classes = [IsAuthenticated, IsAdvisor]
+
+    def get(self, request):
+        students = User.objects.filter(role="STUDENT").prefetch_related("results__course")
+        search = request.query_params.get("search", "").strip()
+        if search:
+            from django.db.models import Q
+            students = students.filter(
+                Q(identifier__icontains=search) |
+                Q(first_name__icontains=search) |
+                Q(last_name__icontains=search)
+            )
+        data = StudentSummarySerializer(students, many=True).data
+        return Response({"count": len(data), "students": data})
+
+
+class StudentDetailView(APIView):
+    """GET /api/students/<identifier>/results/ — Advisor views one student's results."""
+    permission_classes = [IsAuthenticated, IsAdvisor]
+
+    def get(self, request, identifier):
+        try:
+            student = User.objects.get(identifier__iexact=identifier, role="STUDENT")
+        except User.DoesNotExist:
+            return Response({"error": "Student not found."}, status=status.HTTP_404_NOT_FOUND)
+
+        results = Result.objects.filter(student=student).select_related("course")
+        return Response({
+            "student": {
+                "identifier": student.identifier,
+                "name":       student.get_full_name(),
+                "email":      student.email,
+            },
+            "cgpa":    calculate_cgpa(results),
+            "results": ResultSerializer(results, many=True).data,
+        })
 
 
 @method_decorator(csrf_exempt, name='dispatch')

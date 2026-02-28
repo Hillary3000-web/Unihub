@@ -20,8 +20,19 @@ export default function AdvisorDashboard() {
   const [annForm, setAnnForm] = useState({ title: '', content: '', priority: 'NORMAL' })
   const [annPosting, setAnnPosting] = useState(false)
 
+  // ── Students state ──────────────────────────────────────────────────────
+  const [students, setStudents] = useState([])
+  const [studentsLoading, setStudentsLoading] = useState(false)
+  const [studentsFetched, setStudentsFetched] = useState(false)
+  const [studentSearch, setStudentSearch] = useState('')
+  const [expandedStudent, setExpandedStudent] = useState(null)
+  const [expandedResults, setExpandedResults] = useState(null)
+  const [expandedLoading, setExpandedLoading] = useState(false)
+  const [sortBy, setSortBy] = useState('identifier') // 'identifier' | 'name' | 'cgpa'
+  const [sortDir, setSortDir] = useState('asc')
+
   // ── Active tab ────────────────────────────────────────────────────────────
-  const [activeTab, setActiveTab] = useState('upload') // 'upload' | 'announcements'
+  const [activeTab, setActiveTab] = useState('upload') // 'upload' | 'announcements' | 'students'
 
   // ── Fetch announcements ───────────────────────────────────────────────────
   useEffect(() => {
@@ -30,6 +41,77 @@ export default function AdvisorDashboard() {
       .catch(() => { })
       .finally(() => setAnnLoading(false))
   }, [])
+
+  // ── Fetch students when tab is activated ──────────────────────────────────
+  useEffect(() => {
+    if (activeTab !== 'students' || studentsFetched) return
+    setStudentsLoading(true)
+    api.get('/students/')
+      .then(({ data }) => {
+        setStudents(data.students || [])
+        setStudentsFetched(true)
+      })
+      .catch(() => toast.error('Failed to load students.'))
+      .finally(() => setStudentsLoading(false))
+  }, [activeTab])
+
+  // ── Expand student results ────────────────────────────────────────────────
+  const toggleStudentExpand = async (identifier) => {
+    if (expandedStudent === identifier) {
+      setExpandedStudent(null)
+      setExpandedResults(null)
+      return
+    }
+    setExpandedStudent(identifier)
+    setExpandedLoading(true)
+    try {
+      const { data } = await api.get(`/students/${identifier}/results/`)
+      setExpandedResults(data)
+    } catch {
+      toast.error('Failed to load results.')
+      setExpandedStudent(null)
+    } finally {
+      setExpandedLoading(false)
+    }
+  }
+
+  // ── Sorted & filtered students ────────────────────────────────────────────
+  const filteredStudents = students
+    .filter(s => {
+      if (!studentSearch) return true
+      const q = studentSearch.toLowerCase()
+      return s.identifier.toLowerCase().includes(q) ||
+        `${s.first_name} ${s.last_name}`.toLowerCase().includes(q)
+    })
+    .sort((a, b) => {
+      let va, vb
+      if (sortBy === 'cgpa') { va = a.cgpa; vb = b.cgpa }
+      else if (sortBy === 'name') { va = `${a.first_name} ${a.last_name}`; vb = `${b.first_name} ${b.last_name}` }
+      else { va = a.identifier; vb = b.identifier }
+      if (va < vb) return sortDir === 'asc' ? -1 : 1
+      if (va > vb) return sortDir === 'asc' ? 1 : -1
+      return 0
+    })
+
+  const toggleSort = (col) => {
+    if (sortBy === col) setSortDir(d => d === 'asc' ? 'desc' : 'asc')
+    else { setSortBy(col); setSortDir('asc') }
+  }
+
+  const avgCgpa = students.length
+    ? (students.reduce((sum, s) => sum + s.cgpa, 0) / students.length).toFixed(2)
+    : '0.00'
+
+  const cgpaColor = (cgpa) => {
+    if (cgpa >= 3.5) return 'text-emerald-600'
+    if (cgpa >= 2.5) return 'text-amber-600'
+    return 'text-red-600'
+  }
+
+  const sortIcon = (col) => {
+    if (sortBy !== col) return '↕'
+    return sortDir === 'asc' ? '↑' : '↓'
+  }
 
   // ── Drag handlers ─────────────────────────────────────────────────────────
   const onDragOver = useCallback((e) => { e.preventDefault(); setDragging(true) }, [])
@@ -134,6 +216,7 @@ export default function AdvisorDashboard() {
         <div className="flex gap-2 mb-6 animate-fade-up" style={{ animationDelay: '0.1s' }}>
           {[
             { id: 'upload', label: 'Upload Results', icon: '📤' },
+            { id: 'students', label: 'Students', icon: '📋' },
             { id: 'announcements', label: 'Announcements', icon: '📢' },
           ].map(({ id, label, icon }) => (
             <button
@@ -274,6 +357,151 @@ export default function AdvisorDashboard() {
                     </ul>
                   </div>
                 )}
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* ── Students Tab ── */}
+        {activeTab === 'students' && (
+          <div className="animate-fade-in">
+            {/* Summary stats */}
+            {!studentsLoading && studentsFetched && (
+              <div className="flex flex-wrap gap-3 mb-6">
+                <StatPill label="Total Students" value={students.length} color="blue" />
+                <StatPill label="Avg CGPA" value={avgCgpa} color="green" />
+                <StatPill label="First Class (≥4.5)" value={students.filter(s => s.cgpa >= 4.5).length} color="green" />
+                <StatPill label="Below 2.5" value={students.filter(s => s.cgpa < 2.5 && s.cgpa > 0).length} color="red" />
+              </div>
+            )}
+
+            {/* Search bar */}
+            <div className="mb-4">
+              <input
+                type="text"
+                value={studentSearch}
+                onChange={(e) => setStudentSearch(e.target.value)}
+                placeholder="Search by matric number or name..."
+                className="input w-full sm:w-80"
+              />
+            </div>
+
+            {studentsLoading ? (
+              <div className="space-y-3">
+                {[1, 2, 3, 4, 5].map(i => (
+                  <div key={i} className="card">
+                    <div className="flex items-center gap-4">
+                      <div className="skeleton h-10 w-10 rounded-full" />
+                      <div className="flex-1">
+                        <div className="skeleton h-4 w-1/3 mb-2" />
+                        <div className="skeleton h-3 w-1/4" />
+                      </div>
+                      <div className="skeleton h-6 w-16 rounded-full" />
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : filteredStudents.length > 0 ? (
+              <div className="card overflow-hidden !p-0">
+                <div className="overflow-x-auto">
+                  <table className="w-full text-sm font-body">
+                    <thead className="bg-navy-50">
+                      <tr>
+                        <th className="text-left px-4 py-3 text-navy-400 font-medium text-xs uppercase tracking-wider">#</th>
+                        <th
+                          onClick={() => toggleSort('identifier')}
+                          className="text-left px-4 py-3 text-navy-400 font-medium text-xs uppercase tracking-wider cursor-pointer hover:text-navy select-none"
+                        >Reg Number {sortIcon('identifier')}</th>
+                        <th
+                          onClick={() => toggleSort('name')}
+                          className="text-left px-4 py-3 text-navy-400 font-medium text-xs uppercase tracking-wider cursor-pointer hover:text-navy select-none"
+                        >Name {sortIcon('name')}</th>
+                        <th className="text-left px-4 py-3 text-navy-400 font-medium text-xs uppercase tracking-wider">Courses</th>
+                        <th
+                          onClick={() => toggleSort('cgpa')}
+                          className="text-left px-4 py-3 text-navy-400 font-medium text-xs uppercase tracking-wider cursor-pointer hover:text-navy select-none"
+                        >CGPA {sortIcon('cgpa')}</th>
+                        <th className="px-4 py-3"></th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {filteredStudents.map((s, i) => (
+                        <>
+                          <tr
+                            key={s.identifier}
+                            onClick={() => toggleStudentExpand(s.identifier)}
+                            className={`border-t border-navy-100 cursor-pointer transition-colors ${expandedStudent === s.identifier ? 'bg-navy-50' : 'hover:bg-navy-50/50'
+                              }`}
+                          >
+                            <td className="px-4 py-3 text-navy-300">{i + 1}</td>
+                            <td className="px-4 py-3 text-navy font-medium font-mono text-xs">{s.identifier}</td>
+                            <td className="px-4 py-3 text-navy">{s.first_name} {s.last_name}</td>
+                            <td className="px-4 py-3 text-navy-300">{s.result_count}</td>
+                            <td className={`px-4 py-3 font-semibold ${cgpaColor(s.cgpa)}`}>{s.cgpa.toFixed(2)}</td>
+                            <td className="px-4 py-3 text-navy-300 text-lg">
+                              {expandedStudent === s.identifier ? '▲' : '▼'}
+                            </td>
+                          </tr>
+                          {expandedStudent === s.identifier && (
+                            <tr key={`${s.identifier}-detail`}>
+                              <td colSpan="6" className="px-4 py-4 bg-cream border-t border-navy-100">
+                                {expandedLoading ? (
+                                  <div className="flex items-center gap-3 justify-center py-4">
+                                    <div className="w-5 h-5 border-2 border-navy/20 border-t-navy rounded-full animate-spin" />
+                                    <span className="text-navy-300 text-sm">Loading results...</span>
+                                  </div>
+                                ) : expandedResults ? (
+                                  <div>
+                                    <div className="flex items-center gap-3 mb-3">
+                                      <h4 className="font-display text-navy font-semibold text-sm">
+                                        {expandedResults.student.name}'s Results
+                                      </h4>
+                                      <span className={`text-sm font-semibold ${cgpaColor(expandedResults.cgpa)}`}>
+                                        CGPA: {expandedResults.cgpa.toFixed(2)}
+                                      </span>
+                                    </div>
+                                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
+                                      {expandedResults.results.map((r) => (
+                                        <div
+                                          key={r.id}
+                                          className="flex items-center justify-between bg-white rounded-xl px-3 py-2 border border-navy-100"
+                                        >
+                                          <div>
+                                            <p className="text-navy font-medium text-xs">{r.course.code}</p>
+                                            <p className="text-navy-300 text-[11px] truncate max-w-[140px]">{r.course.title}</p>
+                                          </div>
+                                          <div className="flex items-center gap-2">
+                                            <span className="text-navy-300 text-xs">{Number(r.score).toFixed(0)}%</span>
+                                            <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${r.grade === 'A' ? 'bg-emerald-50 text-emerald-700' :
+                                                r.grade === 'B' ? 'bg-blue-50 text-blue-700' :
+                                                  r.grade === 'C' ? 'bg-amber-50 text-amber-700' :
+                                                    r.grade === 'D' ? 'bg-orange-50 text-orange-700' :
+                                                      'bg-red-50 text-red-600'
+                                              }`}>{r.grade}</span>
+                                          </div>
+                                        </div>
+                                      ))}
+                                    </div>
+                                  </div>
+                                ) : null}
+                              </td>
+                            </tr>
+                          )}
+                        </>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            ) : (
+              <div className="text-center py-20">
+                <div className="text-5xl mb-4">📋</div>
+                <h3 className="font-display text-navy text-xl mb-2">
+                  {studentSearch ? 'No students match your search' : 'No students yet'}
+                </h3>
+                <p className="text-navy-300 font-body text-sm">
+                  {studentSearch ? 'Try a different search term.' : 'Upload results to create student accounts.'}
+                </p>
               </div>
             )}
           </div>

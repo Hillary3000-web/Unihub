@@ -10,6 +10,9 @@ from .views import (
     AllResultsView,
     UploadResultsView,
     UploadPDFResultsView,
+    # Students
+    StudentListView,
+    StudentDetailView,
     # Study Materials
     StudyMaterialListView,
     StudyMaterialUploadView,
@@ -30,6 +33,10 @@ urlpatterns = [
     path("results/all/",                    AllResultsView.as_view(),          name="results-all"),
     path("results/upload/",                 UploadResultsView.as_view(),       name="results-upload"),
     path("results/upload-pdf/",             UploadPDFResultsView.as_view(),    name="results-upload-pdf"),
+
+    # ── Students (Advisor) ─────────────────────────────────────────────────────
+    path("students/",                       StudentListView.as_view(),         name="students-list"),
+    path("students/<str:identifier>/results/", StudentDetailView.as_view(),    name="students-detail"),
 
     # ── Study Materials ────────────────────────────────────────────────────────
     path("materials/",                      StudyMaterialListView.as_view(),   name="materials-list"),

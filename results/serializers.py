@@ -3,7 +3,10 @@ results/serializers.py
 """
 
 from rest_framework import serializers
+from django.contrib.auth import get_user_model
 from .models import Course, Result, StudyMaterial, Announcement
+
+User = get_user_model()
 
 
 # ── Course ─────────────────────────────────────────────────────────────────────
@@ -114,3 +117,28 @@ class AnnouncementCreateSerializer(serializers.ModelSerializer):
     class Meta:
         model  = Announcement
         fields = ["id", "title", "content", "priority"]
+
+
+# ── Student Summary (Advisor view) ────────────────────────────────────────────
+
+class StudentSummarySerializer(serializers.Serializer):
+    """Summarises a student with computed CGPA for the advisor's student list."""
+    id           = serializers.IntegerField(source="pk")
+    identifier   = serializers.CharField()
+    first_name   = serializers.CharField()
+    last_name    = serializers.CharField()
+    email        = serializers.EmailField()
+    result_count = serializers.SerializerMethodField()
+    cgpa         = serializers.SerializerMethodField()
+
+    def get_result_count(self, obj):
+        return obj.results.count()
+
+    def get_cgpa(self, obj):
+        results = obj.results.select_related("course").all()
+        total_weighted, total_units = 0, 0
+        for r in results:
+            gp = Result.GRADE_POINTS.get(r.grade, 0)
+            total_weighted += gp * r.course.unit
+            total_units += r.course.unit
+        return round(total_weighted / total_units, 2) if total_units else 0.0
