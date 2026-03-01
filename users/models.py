@@ -95,6 +95,16 @@ class CustomUser(AbstractBaseUser, PermissionsMixin):
         related_name="users",
     )
 
+    # Advisor who created this student account (for per-advisor data isolation)
+    created_by = models.ForeignKey(
+        "self",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="created_students",
+        help_text="Advisor who created this student account",
+    )
+
     is_active = models.BooleanField(default=True)
     is_staff = models.BooleanField(default=False)
     date_joined = models.DateTimeField(auto_now_add=True)

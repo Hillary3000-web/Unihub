@@ -205,15 +205,14 @@ class MyResultsView(APIView):
 
 
 class AllResultsView(generics.ListAPIView):
-    """GET /api/results/all/ — Advisor views results scoped to their university."""
+    """GET /api/results/all/ — Advisor views results for students they created."""
     serializer_class   = ResultAdminSerializer
     permission_classes = [IsAuthenticated, IsAdvisor]
 
     def get_queryset(self):
-        uni = self.request.user.university
-        if not uni:
-            return Result.objects.none()
-        qs = Result.objects.select_related("student", "course").filter(student__university=uni)
+        qs = Result.objects.select_related("student", "course").filter(
+            student__created_by=self.request.user
+        )
         matric = self.request.query_params.get("matric")
         if matric:
             qs = qs.filter(student__identifier__iexact=matric)
@@ -225,14 +224,11 @@ class AllResultsView(generics.ListAPIView):
 # ══════════════════════════════════════════════════════════════════════════════
 
 class StudentListView(APIView):
-    """GET /api/students/ — Advisor views all students with CGPA summary."""
+    """GET /api/students/ — Advisor views only students they created."""
     permission_classes = [IsAuthenticated, IsAdvisor]
 
     def get(self, request):
-        uni = request.user.university
-        if not uni:
-            return Response({"count": 0, "students": []})
-        students = User.objects.filter(role="STUDENT", university=uni)
+        students = User.objects.filter(role="STUDENT", created_by=request.user)
         students = students.prefetch_related("results__course")
         search = request.query_params.get("search", "").strip()
         if search:
@@ -252,10 +248,11 @@ class StudentDetailView(APIView):
 
     def get(self, request, identifier):
         try:
-            filters = {"identifier__iexact": identifier, "role": "STUDENT"}
-            if request.user.university:
-                filters["university"] = request.user.university
-            student = User.objects.get(**filters)
+            student = User.objects.get(
+                identifier__iexact=identifier,
+                role="STUDENT",
+                created_by=request.user,
+            )
         except User.DoesNotExist:
             return Response({"error": "Student not found."}, status=status.HTTP_404_NOT_FOUND)
 
@@ -357,6 +354,7 @@ class UploadPDFResultsView(APIView):
                             identifier = reg_no,
                             role       = "STUDENT",
                             university = advisor_uni,
+                            created_by = request.user,
                         )
                         StudentProfile.objects.create(
                             user       = student,
@@ -385,7 +383,7 @@ class UploadPDFResultsView(APIView):
                         defaults={
                             "score": GRADE_TO_SCORE[grade],
                             "grade": grade,
-                            "uploaded_by": None,
+                            "uploaded_by": request.user,
                         },
                     )
                     if created:
@@ -463,6 +461,7 @@ class UploadResultsView(APIView):
                         identifier = matric,
                         role       = "STUDENT",
                         university = request.user.university,
+                        created_by = request.user,
                     )
                     StudentProfile.objects.get_or_create(
                         user     = student,
@@ -500,7 +499,7 @@ class UploadResultsView(APIView):
                         defaults = {
                             "score": GRADE_TO_SCORE[grade],
                             "grade": grade,
-                            "uploaded_by": None,
+                            "uploaded_by": request.user,
                         },
                     )
                     if created:
@@ -528,10 +527,14 @@ class StudyMaterialListView(generics.ListAPIView):
     permission_classes = [IsAuthenticated]
 
     def get_queryset(self):
-        uni = self.request.user.university
-        if not uni:
+        user = self.request.user
+        # Advisors see only their own materials; students see their university's
+        if user.is_advisor:
+            qs = StudyMaterial.objects.select_related("uploaded_by").filter(uploaded_by=user)
+        elif user.university:
+            qs = StudyMaterial.objects.select_related("uploaded_by").filter(university=user.university)
+        else:
             return StudyMaterial.objects.none()
-        qs = StudyMaterial.objects.select_related("uploaded_by").filter(university=uni)
         course_code = self.request.query_params.get("course")
         mat_type    = self.request.query_params.get("type")
         if course_code:
@@ -589,10 +592,14 @@ class AnnouncementListView(generics.ListAPIView):
     permission_classes = [IsAuthenticated]
 
     def get_queryset(self):
-        uni = self.request.user.university
-        if not uni:
+        user = self.request.user
+        # Advisors see only their own announcements; students see their university's
+        if user.is_advisor:
+            qs = Announcement.objects.select_related("posted_by").filter(posted_by=user)
+        elif user.university:
+            qs = Announcement.objects.select_related("posted_by").filter(university=user.university)
+        else:
             return Announcement.objects.none()
-        qs = Announcement.objects.select_related("posted_by").filter(university=uni)
         priority = self.request.query_params.get("priority")
         if priority:
             qs = qs.filter(priority__iexact=priority)
@@ -619,10 +626,12 @@ class AnnouncementCreateView(generics.CreateAPIView):
 class AnnouncementDetailView(generics.RetrieveUpdateDestroyAPIView):
 
     def get_queryset(self):
-        uni = self.request.user.university
-        if not uni:
-            return Announcement.objects.none()
-        return Announcement.objects.filter(university=uni)
+        user = self.request.user
+        if user.is_advisor:
+            return Announcement.objects.filter(posted_by=user)
+        elif user.university:
+            return Announcement.objects.filter(university=user.university)
+        return Announcement.objects.none()
 
     def get_serializer_class(self):
         if self.request.method in ("PUT", "PATCH"):
