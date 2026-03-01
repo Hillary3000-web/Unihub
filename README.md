@@ -1,6 +1,6 @@
 # UniHub 🎓
 
-A full-stack university student portal for managing academic results, sharing study materials, and broadcasting announcements. Built with **Django REST Framework** (backend) and **React + Vite** (frontend).
+A full-stack university academic result management system that eliminates the manual process of distributing grades. Course advisors upload PDF or Excel result sheets, and student accounts are created automatically — each advisor's data is fully isolated so multiple advisors (even at the same university) can manage their own students independently. Built with **Django REST Framework** (backend) and **React + Vite** (frontend).
 
 ---
 
@@ -9,9 +9,11 @@ A full-stack university student portal for managing academic results, sharing st
 | Feature | Description |
 |---|---|
 | **JWT Authentication** | Secure login/register with role-based access (Student & Course Advisor) |
+| **Per-Advisor Data Isolation** | Each advisor sees only their own students, results, announcements, and materials — even within the same university |
+| **Multi-Institution Support** | Multiple universities supported, each with their own departments |
 | **Student Dashboard** | View personal results, GPA/CGPA summary, and semester breakdown |
-| **Advisor Dashboard** | Upload results via Excel/PDF, manage courses, and post announcements |
-| **Result Management** | Bulk upload student scores from `.xlsx` or `.pdf` files with automatic grade calculation |
+| **Advisor Dashboard** | Upload results via Excel/PDF, manage students, and post announcements |
+| **Bulk Result Upload** | Upload student scores from `.xlsx` or `.pdf` files — student accounts are auto-created and grades are calculated automatically |
 | **Resource Hub** | Share and download study materials — past questions, lecture notes, etc. |
 | **Announcements** | Priority-based announcement system (Normal / Important / Urgent) |
 
@@ -144,12 +146,15 @@ The app will be available at `http://localhost:5173/`.
 ## Auth Flow
 
 ```
-Advisor registers (name + staff ID + password)
+Advisor registers (name + staff ID + university + password)
   → Advisor logs in (staff ID + password)
     → Uploads PDF/Excel results
-      → Student accounts auto-created from result data
+      → Student accounts auto-created (linked to this advisor only)
         → Student logs in (matric number only)
           → Student Dashboard (results, CGPA, announcements)
+
+Note: Each advisor's data is fully isolated.
+Advisor A and Advisor B at the same university see completely different dashboards.
 ```
 
 ---
